@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.3"
+SCRIPT_VERSION="0.0.4"
 
 set -euo pipefail
 
@@ -1076,14 +1076,7 @@ run_preflight() {
         for w in "${PREFLIGHT_WARNS[@]}"; do warn "  - ${w}"; done
         if [[ "${ASSUME_YES}" == false && "${CHECK_ONLY}" == false ]]; then
             echo
-            if [[ -t 0 ]]; then
-                read -r -p "是否继续安装？[y/N]: " ans
-            elif [[ -r /dev/tty ]]; then
-                read -r -p "是否继续安装？[y/N]: " ans </dev/tty
-            else
-                ans="n"
-            fi
-            [[ "${ans}" =~ ^[Yy]$ ]] || err "安装已取消"
+            prompt_yes_no "是否继续安装？" "y" || err "安装已取消"
         fi
     else
         log "预检: 全部通过"
