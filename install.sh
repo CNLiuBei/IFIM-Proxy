@@ -678,7 +678,7 @@ prompt_cert_method() {
                 info "CF Token 需具备 Zone → DNS → Edit 权限"
                 info "创建地址: https://dash.cloudflare.com/profile/api-tokens"
                 while [[ -z "${CF_TOKEN}" ]]; do
-                    prompt_secret "请输入 Cloudflare API Token" CF_TOKEN
+                    prompt_secret "请输入 Cloudflare API Token" CF_TOKEN true
                     [[ -n "${CF_TOKEN}" ]] || warn "Token 不能为空"
                 done
                 validate_cf_token
