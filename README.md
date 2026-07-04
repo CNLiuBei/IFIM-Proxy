@@ -34,7 +34,9 @@ bash -c 'R=CNLiuBei/IFIM-Proxy; S=$(curl -fsSL https://api.github.com/repos/$R/c
 
 即使误用了旧缓存脚本，启动后也会**自动检测并升级到最新版**再安装。
 
-安装开始时会显示脚本版本（当前 **v0.0.18**）。
+安装开始时会显示脚本版本（格式 `YYYY.MM.DD+<commit>`，**push 到 main 后由 CI 自动同步**，无需手改）。
+
+> 版本号由 `scripts/sync-version.sh` 根据 git commit 自动生成；GitHub Actions 在每次 push 后写入 `install.sh`。
 
 重装时若已有有效 TLS 证书（本机或 acme.sh），将自动复用，不会重复向 Let's Encrypt 申请。证书临近到期时，每天 **03:00 / 15:00** 自动续签并重载服务。
 

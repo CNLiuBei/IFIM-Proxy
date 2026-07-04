@@ -56,6 +56,7 @@ scripts=(
     renew-hook.sh
     port-hopping.sh
     update-stack.sh
+    sync-version.sh
 )
 
 mkdir -p "${INSTALL_DIR}/scripts"

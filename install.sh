@@ -3,7 +3,8 @@
 #
 # IFIM-Proxy: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.18"
+# @commit: 331d1e252ddb6b3bc7536a1eff42e1861760d518
+SCRIPT_VERSION="2026.07.04+331d1e2"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -113,17 +114,28 @@ upgrade_install_script() {
     exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}"
 }
 
+# 读取 install.sh 内嵌的 commit ref（由 sync-version.sh / CI 写入）
+get_script_commit_ref() {
+    sed -n '1,20p' "$0" 2>/dev/null | sed -n 's/^# @commit: //p' | head -1
+}
+
 # 与 GitHub 最新 commit 比对；发现旧版则自动下载并重跑
 check_script_version() {
-    local sha remote_ver
+    local sha remote_ver local_ref
 
     [[ "${SKIP_VERSION_CHECK}" == true ]] && return 0
     command -v curl >/dev/null 2>&1 || return 0
 
+    local_ref=$(get_script_commit_ref)
     sha=$(github_main_sha) || {
         warn "无法获取 GitHub 最新 commit，继续运行（当前 v${SCRIPT_VERSION}）"
         return 0
     }
+
+    if [[ -n "${local_ref}" && "${local_ref}" != "pending" && "${local_ref}" == "${sha}" ]]; then
+        info "脚本已是最新（${sha:0:7}）"
+        return 0
+    fi
 
     remote_ver=$(fetch_remote_script_version "${sha}") || true
     if [[ -z "${remote_ver}" ]]; then
@@ -131,7 +143,7 @@ check_script_version() {
         return 0
     fi
 
-    if [[ "${remote_ver}" == "${SCRIPT_VERSION}" ]]; then
+    if [[ "${remote_ver}" == "${SCRIPT_VERSION}" && "${local_ref}" == "${sha}" ]]; then
         info "脚本版本 v${SCRIPT_VERSION}（已是最新）"
         return 0
     fi
@@ -1769,6 +1781,7 @@ fetch_asset "scripts/renew-cert.sh" "${INSTALL_DIR}/scripts/renew-cert.sh"
 fetch_asset "scripts/refresh-clash.sh" "${INSTALL_DIR}/scripts/refresh-clash.sh"
 fetch_asset "scripts/refresh-panel.sh" "${INSTALL_DIR}/scripts/refresh-panel.sh"
 fetch_asset "scripts/update-stack.sh" "${INSTALL_DIR}/scripts/update-stack.sh"
+fetch_asset "scripts/sync-version.sh" "${INSTALL_DIR}/scripts/sync-version.sh"
 fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
 
 write_singbox_config

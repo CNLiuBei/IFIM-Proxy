@@ -10,16 +10,18 @@ ok()   { echo "[OK] $*"; PASS=$((PASS+1)); }
 fail() { echo "[FAIL] $*"; FAIL=$((FAIL+1)); }
 
 SCRIPT_VER=$(sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p' "${SCRIPT_DIR}/install.sh" | head -1)
-SB_VER=$(sed -n 's/^SING_BOX_VERSION="\([^"]*\)".*/\1/p' "${SCRIPT_DIR}/install.sh" | head -1)
+COMMIT_REF=$(sed -n 's/^# @commit: //p' "${SCRIPT_DIR}/install.sh" | head -1)
 
 echo "=== IFIM-Proxy dry-run test ==="
 
 bash -n "${SCRIPT_DIR}/install.sh" && ok "install.sh syntax"
-grep -q "^SCRIPT_VERSION=\"${SCRIPT_VER}\"" "${SCRIPT_DIR}/install.sh" && ok "SCRIPT_VERSION ${SCRIPT_VER}" || fail "SCRIPT_VERSION"
+[[ -n "${SCRIPT_VER}" && "${SCRIPT_VER}" != "auto" ]] && ok "SCRIPT_VERSION ${SCRIPT_VER}" || fail "SCRIPT_VERSION"
+[[ -n "${COMMIT_REF}" && "${COMMIT_REF}" != "pending" ]] && ok "commit ref ${COMMIT_REF:0:7}" || fail "commit ref"
 bash "${SCRIPT_DIR}/install.sh" --version 2>/dev/null | grep -q "v${SCRIPT_VER}" && ok "install.sh --version" || fail "install.sh --version"
 bash -n "${SCRIPT_DIR}/uninstall.sh" && ok "uninstall.sh syntax"
 for s in scripts/*.sh; do bash -n "$s" && ok "$(basename "$s") syntax"; done
 
+SB_VER=$(sed -n 's/^SING_BOX_VERSION="\([^"]*\)".*/\1/p' "${SCRIPT_DIR}/install.sh" | head -1)
 ARCH=$(uname -m)
 case "${ARCH}" in x86_64) SB_ARCH="amd64" ;; aarch64) SB_ARCH="arm64" ;; *) SB_ARCH="amd64" ;; esac
 VER="${SB_VER}"
