@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.12"
+SCRIPT_VERSION="0.0.13"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -1447,6 +1447,7 @@ EOF
     location /s/${SUB_PANEL_TOKEN}/ {
         alias ${WEB_ROOT}/panel/;
         index index.html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
     }
 EOF
     fi
