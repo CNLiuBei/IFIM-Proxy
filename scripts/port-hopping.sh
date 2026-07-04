@@ -11,8 +11,11 @@ while iptables -t nat -L PREROUTING -n --line-numbers 2>/dev/null | grep -q "${C
     iptables -t nat -D PREROUTING "${LINE}"
 done
 
-iptables -t nat -A PREROUTING -p udp --dport "${START_PORT}:${END_PORT}" \
+if ! iptables -t nat -A PREROUTING -p udp --dport "${START_PORT}:${END_PORT}" \
     -m comment --comment "${COMMENT}" \
-    -j DNAT --to-destination ":${TARGET_PORT}"
+    -j DNAT --to-destination "127.0.0.1:${TARGET_PORT}" 2>/dev/null; then
+    iptables -t nat -A PREROUTING -p udp --dport "${START_PORT}:${END_PORT}" \
+        -j DNAT --to-destination "127.0.0.1:${TARGET_PORT}"
+fi
 
-echo "Port hopping: UDP ${START_PORT}-${END_PORT} -> ${TARGET_PORT}"
+echo "Port hopping: UDP ${START_PORT}-${END_PORT} -> 127.0.0.1:${TARGET_PORT}"

@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.7"
+SCRIPT_VERSION="0.0.8"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -1528,8 +1528,15 @@ EOF
     systemctl daemon-reload
     systemctl enable sing-box stable-proxy-port-hopping nginx
     systemctl restart nginx
-    "${INSTALL_DIR}/scripts/port-hopping.sh" 443 443 "${HY2_PORT_END}" || true
     systemctl restart sing-box
+    systemctl start stable-proxy-port-hopping 2>/dev/null \
+        || "${INSTALL_DIR}/scripts/port-hopping.sh" 443 443 "${HY2_PORT_END}" || true
+}
+
+apply_port_hopping() {
+    log "正在配置 UDP 端口跳跃..."
+    systemctl start stable-proxy-port-hopping 2>/dev/null \
+        || "${INSTALL_DIR}/scripts/port-hopping.sh" 443 443 "${HY2_PORT_END}" || true
 }
 
 setup_firewall() {
@@ -1544,9 +1551,19 @@ setup_cron() {
 }
 
 verify_install() {
-    local ok=true
+    local ok=true i
+
     echo
     log "正在验证安装结果..."
+
+    for i in $(seq 1 10); do
+        if ss -tlnpH 'sport = :443' 2>/dev/null | grep -q sing-box \
+            && ss -ulnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
+            break
+        fi
+        [[ ${i} -eq 10 ]] || sleep 1
+    done
+
     for svc in sing-box nginx stable-proxy-port-hopping; do
         if systemctl is-active --quiet "${svc}"; then
             info "服务 ${svc}: 运行中"
@@ -1555,13 +1572,13 @@ verify_install() {
             ok=false
         fi
     done
-    if ss -tlnH 'sport = :443' 2>/dev/null | grep -q sing-box; then
+    if ss -tlnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
         info "TCP 443 (Reality): 监听正常"
     else
         fail "TCP 443 (Reality): 未监听"
         ok=false
     fi
-    if ss -ulnH 'sport = :443' 2>/dev/null | grep -q sing-box; then
+    if ss -ulnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
         info "UDP 443 (hy2): 监听正常"
     else
         fail "UDP 443 (hy2): 未监听"
@@ -1725,8 +1742,9 @@ fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
 
 write_singbox_config
 setup_nginx
-setup_systemd
 setup_firewall
+setup_systemd
 setup_cert_renewal
+apply_port_hopping
 verify_install
 print_links
