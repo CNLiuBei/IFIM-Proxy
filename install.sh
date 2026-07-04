@@ -470,6 +470,11 @@ validate_cf_token() {
         return 0
     fi
     if echo "${resp}" | grep -q '"success"[[:space:]]*:[[:space:]]*false'; then
+        local cf_err
+        cf_err=$(echo "${resp}" | sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+        if [[ -n "${cf_err}" ]]; then
+            err "Cloudflare Token 无效: ${cf_err}（需 Zone → DNS → Edit 权限）"
+        fi
         err "Cloudflare Token 无效或权限不足，请重新创建（需 DNS Edit 权限）"
     fi
     if ! echo "${resp}" | grep -q '"status"[[:space:]]*:[[:space:]]*"active"'; then
