@@ -328,10 +328,13 @@ prompt_secret() {
 
     if [[ "${visible}" == true ]]; then
         info "Token 会显示在屏幕上，粘贴后按 Enter 确认"
+        if [[ -t 0 || -r "${tty}" ]]; then
+            stty echo 2>/dev/null || true
+        fi
         if [[ -t 0 ]]; then
             read -r -p "${prompt}: " value
         elif [[ -r "${tty}" ]]; then
-            read -r -p "${prompt}: " value <"${tty}"
+            read -r -p "${prompt}: " value <"${tty}" >"${tty}"
         else
             err "${prompt}（非交互环境，请使用 --cf-token 传参）"
         fi
