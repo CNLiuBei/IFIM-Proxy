@@ -1232,11 +1232,19 @@ ensure_acme_sh() {
 
 install_tls_cert_files() {
     local tls_dir="${INSTALL_DIR}/tls"
+    local reload_cmd="true"
+
+    # 证书复制完成后重载服务；安装早期 sing-box 可能尚未创建，需容错避免 acme.sh 报 Reload error
+    if [[ -f "${INSTALL_DIR}/scripts/renew-hook.sh" ]]; then
+        reload_cmd="/bin/bash ${INSTALL_DIR}/scripts/renew-hook.sh || true"
+    else
+        reload_cmd="systemctl reload nginx 2>/dev/null || true; systemctl restart sing-box 2>/dev/null || true"
+    fi
 
     "${HOME}/.acme.sh/acme.sh" --install-cert -d "${DOMAIN}" --ecc \
         --key-file "${tls_dir}/${DOMAIN}.key" \
         --fullchain-file "${tls_dir}/${DOMAIN}.crt" \
-        --reloadcmd "systemctl reload nginx 2>/dev/null; systemctl restart sing-box 2>/dev/null"
+        --reloadcmd "${reload_cmd}"
 }
 
 issue_tls_cert() {
