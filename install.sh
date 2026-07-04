@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.14"
+SCRIPT_VERSION="0.0.15"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
