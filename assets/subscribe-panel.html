@@ -10,34 +10,43 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #0f172a; color: #e2e8f0; line-height: 1.5; min-height: 100vh;
     }
-    .wrap { max-width: 520px; margin: 0 auto; padding: 1.25rem; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 1.25rem; }
     h1 { font-size: 1.35rem; text-align: center; margin-bottom: .25rem; }
     .sub { text-align: center; color: #94a3b8; font-size: .85rem; margin-bottom: 1.25rem; }
+    .cards-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
     .card {
       background: #1e293b; border-radius: 12px; padding: 1rem 1.1rem;
-      margin-bottom: 1rem; border: 1px solid #334155;
+      border: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
     }
     .card h2 { font-size: .95rem; color: #38bdf8; margin-bottom: .75rem; }
     .tag { display: inline-block; font-size: .7rem; padding: .15rem .45rem; border-radius: 4px; margin-right: .35rem; }
     .tag-main { background: #065f46; color: #6ee7b7; }
     .tag-back { background: #713f12; color: #fcd34d; }
-    .qr { text-align: center; margin: .75rem 0; min-height: 0; }
-    .qr canvas, .qr img { border-radius: 8px; background: #fff; padding: 8px; }
+    .qr { text-align: center; margin: .75rem 0; }
+    .qr img { border-radius: 8px; background: #fff; padding: 6px; max-width: 100%; height: auto; }
     .link-box {
       background: #0f172a; border: 1px solid #475569; border-radius: 8px;
-      padding: .55rem .65rem; font-size: .72rem; word-break: break-all;
-      color: #cbd5e1; max-height: 4.5rem; overflow-y: auto; margin-bottom: .65rem;
+      padding: .55rem .65rem; font-size: .68rem; word-break: break-all;
+      color: #cbd5e1; max-height: 4rem; overflow-y: auto; margin-bottom: .65rem;
     }
-    .btns { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .hint { font-size: .75rem; color: #94a3b8; margin-bottom: .5rem; }
+    .btns { display: flex; flex-wrap: wrap; gap: .4rem; }
     button, .btn {
-      border: none; border-radius: 8px; padding: .5rem .8rem; font-size: .82rem;
+      border: none; border-radius: 8px; padding: .45rem .65rem; font-size: .78rem;
       cursor: pointer; text-decoration: none; display: inline-block; text-align: center;
     }
-    .btn-copy { background: #334155; color: #f1f5f9; }
+    .btn-copy { background: #334155; color: #f1f5f9; width: 100%; }
     .btn-copy:hover { background: #475569; }
-    .btn-import { background: #2563eb; color: #fff; flex: 1; min-width: calc(50% - .25rem); }
+    .btn-import { background: #2563eb; color: #fff; flex: 1; min-width: calc(50% - .2rem); }
     .btn-import:hover { background: #1d4ed8; }
-    .import-label { font-size: .78rem; color: #94a3b8; margin: .65rem 0 .35rem; }
+    .import-label { font-size: .75rem; color: #94a3b8; margin: .6rem 0 .3rem; }
     .toast {
       position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
       background: #22c55e; color: #fff; padding: .5rem 1rem; border-radius: 8px;
@@ -45,6 +54,9 @@
     }
     .toast.show { opacity: 1; }
     footer { text-align: center; color: #64748b; font-size: .75rem; padding: 1rem 0 2rem; }
+    @media (max-width: 960px) {
+      .cards-row { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -52,45 +64,39 @@
     <h1>stable-proxy-stack</h1>
     <p class="sub" id="domain-label">加载中…</p>
 
-    <div class="card">
-      <h2>📡 订阅链接（推荐）</h2>
-      <p style="font-size:.8rem;color:#94a3b8;margin-bottom:.5rem">一次导入 Reality + hy2 两个节点（Clash 请在分组 stable-proxy 中查看）</p>
-      <div class="link-box" id="sub-url"></div>
-      <div class="qr"><img src="qr-sub.png" alt="订阅二维码" width="216" height="216"></div>
-      <div class="btns">
-        <button class="btn-copy" type="button" id="copy-sub">复制订阅 URL</button>
+    <div class="cards-row">
+      <div class="card">
+        <h2>📡 订阅链接</h2>
+        <p class="hint">一次导入 Reality + hy2（Clash 见分组 stable-proxy）</p>
+        <div class="link-box" id="sub-url"></div>
+        <div class="qr"><img src="qr-sub.png" alt="订阅二维码" width="180"></div>
+        <div class="btns">
+          <button class="btn-copy" type="button" id="copy-sub">复制订阅 URL</button>
+        </div>
+        <p class="import-label">一键导入</p>
+        <div class="btns" id="import-sub-btns"></div>
       </div>
-      <p class="import-label">一键导入客户端</p>
-      <div class="btns" id="import-sub-btns"></div>
-    </div>
 
-    <div class="card">
-      <h2><span class="tag tag-main">主力</span> VLESS Reality</h2>
-      <div class="link-box" id="reality-link"></div>
-      <div class="qr"><img src="qr-reality.png" alt="Reality 二维码" width="216" height="216"></div>
-      <div class="btns">
-        <button class="btn-copy" type="button" id="copy-reality">复制链接</button>
+      <div class="card">
+        <h2><span class="tag tag-main">主力</span> Reality</h2>
+        <div class="link-box" id="reality-link"></div>
+        <div class="qr"><img src="qr-reality.png" alt="Reality 二维码" width="180"></div>
+        <div class="btns">
+          <button class="btn-copy" type="button" id="copy-reality">复制链接</button>
+        </div>
+        <p class="import-label">单节点导入</p>
+        <div class="btns" id="import-reality-btns"></div>
       </div>
-      <p class="import-label">单节点导入</p>
-      <div class="btns" id="import-reality-btns"></div>
-    </div>
 
-    <div class="card">
-      <h2><span class="tag tag-back">备用</span> Hysteria2</h2>
-      <div class="link-box" id="hy2-link"></div>
-      <div class="qr"><img src="qr-hy2.png" alt="Hysteria2 二维码" width="216" height="216"></div>
-      <div class="btns">
-        <button class="btn-copy" type="button" id="copy-hy2">复制链接</button>
-      </div>
-      <p class="import-label">单节点导入</p>
-      <div class="btns" id="import-hy2-btns"></div>
-    </div>
-
-    <div class="card">
-      <h2>⚡ Clash Meta 配置</h2>
-      <div class="btns">
-        <a class="btn btn-import" id="clash-open" href="#">Clash Meta 导入</a>
-        <button class="btn-copy" type="button" id="copy-clash">复制 Clash URL</button>
+      <div class="card">
+        <h2><span class="tag tag-back">备用</span> Hysteria2</h2>
+        <div class="link-box" id="hy2-link"></div>
+        <div class="qr"><img src="qr-hy2.png" alt="Hysteria2 二维码" width="180"></div>
+        <div class="btns">
+          <button class="btn-copy" type="button" id="copy-hy2">复制链接</button>
+        </div>
+        <p class="import-label">单节点导入</p>
+        <div class="btns" id="import-hy2-btns"></div>
       </div>
     </div>
 
@@ -155,7 +161,6 @@
         ['Hiddify', 'hiddify://import/?url=' + encUrl(sub)],
         ['NekoBox', 'sn://subscription?url=' + encUrl(sub)],
       ]);
-      document.getElementById('clash-open').href = 'clash-meta://install-config?url=' + encUrl(clash);
     }
 
     function renderNodeImports(boxId, link) {
@@ -177,7 +182,6 @@
       document.getElementById('copy-sub').onclick = () => copyText(data.subUrl);
       document.getElementById('copy-reality').onclick = () => copyText(data.realityLink);
       document.getElementById('copy-hy2').onclick = () => copyText(data.hy2Link);
-      document.getElementById('copy-clash').onclick = () => copyText(data.clashUrl);
 
       renderSubImports();
       renderNodeImports('import-reality-btns', data.realityLink);
