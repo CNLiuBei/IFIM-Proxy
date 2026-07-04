@@ -9,17 +9,20 @@ FAIL=0
 ok()   { echo "[OK] $*"; PASS=$((PASS+1)); }
 fail() { echo "[FAIL] $*"; FAIL=$((FAIL+1)); }
 
-echo "=== stable-proxy-stack dry-run test ==="
+SCRIPT_VER=$(sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p' "${SCRIPT_DIR}/install.sh" | head -1)
+SB_VER=$(sed -n 's/^SING_BOX_VERSION="\([^"]*\)".*/\1/p' "${SCRIPT_DIR}/install.sh" | head -1)
+
+echo "=== IFIM-Proxy dry-run test ==="
 
 bash -n "${SCRIPT_DIR}/install.sh" && ok "install.sh syntax"
-grep -q '^SCRIPT_VERSION="0.0.16"' "${SCRIPT_DIR}/install.sh" && ok "SCRIPT_VERSION 0.0.16" || fail "SCRIPT_VERSION"
-bash "${SCRIPT_DIR}/install.sh" --version 2>/dev/null | grep -q 'v0.0.15' && ok "install.sh --version" || fail "install.sh --version"
+grep -q "^SCRIPT_VERSION=\"${SCRIPT_VER}\"" "${SCRIPT_DIR}/install.sh" && ok "SCRIPT_VERSION ${SCRIPT_VER}" || fail "SCRIPT_VERSION"
+bash "${SCRIPT_DIR}/install.sh" --version 2>/dev/null | grep -q "v${SCRIPT_VER}" && ok "install.sh --version" || fail "install.sh --version"
 bash -n "${SCRIPT_DIR}/uninstall.sh" && ok "uninstall.sh syntax"
 for s in scripts/*.sh; do bash -n "$s" && ok "$(basename "$s") syntax"; done
 
 ARCH=$(uname -m)
 case "${ARCH}" in x86_64) SB_ARCH="amd64" ;; aarch64) SB_ARCH="arm64" ;; *) SB_ARCH="amd64" ;; esac
-VER="1.13.14"
+VER="${SB_VER}"
 TMP=/tmp/sb-test-$$
 mkdir -p "$TMP"
 curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${VER}/sing-box-${VER}-linux-${SB_ARCH}.tar.gz" \
@@ -32,7 +35,7 @@ PRIV=$(echo "$KEYS" | awk '/PrivateKey/ {print $2}')
 PUB=$(echo "$KEYS" | awk '/PublicKey/ {print $2}')
 [[ -n "$PRIV" && -n "$PUB" ]] && ok "reality keypair generation" || fail "reality keypair"
 
-UUID=$(cat /proc/sys/kernel/random/uuid)
+UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)
 OBFS=$(openssl rand -hex 8)
 cat >"$TMP/config.json" <<EOF
 {

@@ -2,24 +2,30 @@
 # 刷新订阅页 HTML + 二维码（已安装机器修复用）
 set -euo pipefail
 
-INSTALL_DIR="/etc/stable-proxy-stack"
-WEB_ROOT="/var/www/stable-proxy"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/common.env
+source "${SCRIPT_DIR}/common.env"
+
 PANEL_DIR="${WEB_ROOT}/panel"
-GITHUB_REPO="${GITHUB_REPO:-CNLiuBei/stable-proxy-stack}"
 TS="$(date +%s)"
 
+[[ "${EUID:-$(id -u)}" -eq 0 ]] || { echo "请使用 root 运行此脚本"; exit 1; }
 [[ -f "${PANEL_DIR}/config.json" ]] || { echo "config.json 不存在: ${PANEL_DIR}/config.json"; exit 1; }
 
-command -v jq >/dev/null 2>&1 || apt-get install -y -qq jq >/dev/null 2>&1 || apt-get install -y jq
-command -v python3 >/dev/null 2>&1 || apt-get install -y -qq python3 >/dev/null 2>&1 || apt-get install -y python3
-command -v qrencode >/dev/null 2>&1 || apt-get install -y -qq qrencode >/dev/null 2>&1 || apt-get install -y qrencode
-command -v curl >/dev/null 2>&1 || apt-get install -y -qq curl >/dev/null 2>&1 || apt-get install -y curl
+need_cmd() {
+    command -v "$1" >/dev/null 2>&1 || { echo "缺少依赖: $1"; exit 1; }
+}
+need_cmd jq
+need_cmd python3
+need_cmd qrencode
+need_cmd curl
 
 sub_url=$(jq -r .subUrl "${PANEL_DIR}/config.json")
 reality_link=$(jq -r .realityLink "${PANEL_DIR}/config.json")
 hy2_link=$(jq -r .hy2Link "${PANEL_DIR}/config.json")
 
-sha=$(curl -fsSL --max-time 15 -H "User-Agent: stable-proxy-refresh" \
+sha=$(curl -fsSL --max-time 15 -H "Accept: application/vnd.github+json" \
+    -H "User-Agent: ifim-proxy-refresh" \
     "https://api.github.com/repos/${GITHUB_REPO}/commits/main" \
     | sed -n 's/.*"sha": "\([a-f0-9]\{40\}\)".*/\1/p' | head -1)
 

@@ -2,6 +2,12 @@
 set -euo pipefail
 
 INSTALL_DIR="/etc/stable-proxy-stack"
+WEB_ROOT="/var/www/stable-proxy"
+
+if [[ "${1:-}" != "-y" ]]; then
+    read -r -p "确认卸载 IFIM-Proxy？此操作不可恢复 [y/N]: " ans
+    [[ "${ans}" =~ ^[Yy]$ ]] || { echo "已取消"; exit 0; }
+fi
 
 echo "Stopping services..."
 systemctl disable --now sing-box stable-proxy-port-hopping 2>/dev/null || true
@@ -17,6 +23,7 @@ echo "Removing cron jobs..."
 
 echo "Removing files..."
 rm -rf "${INSTALL_DIR}"
+rm -rf "${WEB_ROOT}"
 rm -f /etc/systemd/system/sing-box.service
 rm -f /etc/systemd/system/stable-proxy-port-hopping.service
 rm -f /etc/nginx/conf.d/stable-proxy.conf
@@ -27,3 +34,4 @@ systemctl daemon-reload
 systemctl restart nginx 2>/dev/null || true
 
 echo "Done. TLS certs in ~/.acme.sh were not removed."
+echo "Note: UFW rules added during install were not auto-removed."

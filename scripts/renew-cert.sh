@@ -65,4 +65,4 @@ fi
 
 log "续签未完成（退出码 ${renew_rc}）"
 [[ -n "${renew_out}" ]] && log "${renew_out}"
-exit 0
+exit 1

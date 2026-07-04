@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.16"
+SCRIPT_VERSION="0.0.17"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -43,9 +43,10 @@ setup_utf8_locale
 
 INSTALL_DIR="/etc/stable-proxy-stack"
 WEB_ROOT="/var/www/stable-proxy"
-REPO_BASE="${REPO_BASE:-https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main}"
-GITHUB_REPO="${GITHUB_REPO:-CNLiuBei/stable-proxy-stack}"
+GITHUB_REPO="${GITHUB_REPO:-CNLiuBei/IFIM-Proxy}"
+REPO_BASE="${REPO_BASE:-https://raw.githubusercontent.com/${GITHUB_REPO}/main}"
 REALITY_DEST="${REALITY_DEST:-dl.google.com}"
+REALITY_SHORT_ID="${REALITY_SHORT_ID:-6ba85179e30d4fc2}"
 HY2_PORT_END="${HY2_PORT_END:-450}"
 SING_BOX_VERSION="${SING_BOX_VERSION:-1.13.14}"
 
@@ -156,8 +157,9 @@ usage() {
   --email EMAIL         ACME 邮箱（默认 admin@域名）
   --cf-token TOKEN      Cloudflare API Token（DNS 证书，跳过 CF 询问）
   --reality-dest HOST   Reality 伪装目标（默认 dl.google.com）
-  --hy2-port-end PORT   hy2 UDP 端口跳跃上限（默认 450）
+  --hy2-port-end PORT   hy2 UDP 端口跳跃上限（默认 450，须 >= 444）
   --sing-box-version V  sing-box 版本（默认 1.13.14）
+  --reset-firewall      安装时重置 UFW 规则（默认仅增量添加）
   --check-only          仅环境预检，不安装
   --skip-check          跳过预检（不推荐）
   --skip-version-check  跳过与 GitHub 最新版本比对
@@ -181,15 +183,20 @@ while [[ $# -gt 0 ]]; do
         --reality-dest) REALITY_DEST="$2"; shift 2 ;;
         --hy2-port-end) HY2_PORT_END="$2"; shift 2 ;;
         --sing-box-version) SING_BOX_VERSION="$2"; shift 2 ;;
+        --reset-firewall) RESET_FIREWALL=true; shift ;;
         --check-only) CHECK_ONLY=true; shift ;;
         --skip-check) SKIP_CHECK=true; shift ;;
         --skip-version-check) SKIP_VERSION_CHECK=true; shift ;;
         -y|--yes) ASSUME_YES=true; shift ;;
-        -V|--version) echo "stable-proxy-stack install.sh v${SCRIPT_VERSION}"; exit 0 ;;
+        -V|--version) echo "IFIM-Proxy install.sh v${SCRIPT_VERSION}"; exit 0 ;;
         -h|--help) usage; exit 0 ;;
         *) err "未知选项: $1" ;;
     esac
 done
+
+if [[ "${HY2_PORT_END}" -lt 444 ]]; then
+    err "--hy2-port-end 须 >= 444（当前: ${HY2_PORT_END}）"
+fi
 
 prompt_yes_no() {
     local prompt="$1"
@@ -928,7 +935,7 @@ run_preflight() {
 
     echo
     echo "============================================================"
-    echo "  stable-proxy-stack 环境预检"
+    echo "  IFIM-Proxy 环境预检"
     echo "============================================================"
     info "域名: ${DOMAIN}"
     info "证书方式: $([[ -n "${CF_TOKEN}" ]] && echo 'Cloudflare DNS' || echo 'Let'\''s Encrypt Standalone（需 TCP 80）')"
@@ -996,6 +1003,12 @@ run_preflight() {
     fi
     if [[ -n "${PUBLIC_IPV6}" ]]; then
         info "本机 IPv6: ${PUBLIC_IPV6}"
+    fi
+
+    if check_connectivity 1.1.1.1 443 tcp; then
+        info "出站 TCP 443: 正常"
+    else
+        add_warn "出站 TCP 443 不可达（可能影响 Reality 握手）"
     fi
 
     # DNS A record
@@ -1388,7 +1401,7 @@ write_singbox_config() {
           "enabled": true,
           "handshake": { "server": "${REALITY_DEST}", "server_port": 443 },
           "private_key": "${REALITY_PRIV}",
-          "short_id": ["", "6ba85179e30d4fc2"]
+          "short_id": ["", "${REALITY_SHORT_ID}"]
         }
       }
     }
@@ -1480,7 +1493,7 @@ generate_subscribe_web() {
     local panel_dir="${WEB_ROOT}/panel"
     local sub_url clash_url
 
-    SUB_PANEL_TOKEN=$(openssl rand -hex 8)
+    SUB_PANEL_TOKEN=$(openssl rand -hex 16)
     PANEL_URL="https://${DOMAIN}:8443/s/${SUB_PANEL_TOKEN}/"
     sub_url="${PANEL_URL}sub"
     clash_url="${PANEL_URL}clash.yaml"
@@ -1581,7 +1594,12 @@ apply_port_hopping() {
 }
 
 setup_firewall() {
-    ensure_firewall_ports true
+    if [[ "${RESET_FIREWALL:-false}" == true ]]; then
+        warn "正在重置 UFW 规则（--reset-firewall）..."
+        ensure_firewall_ports true
+    else
+        ensure_firewall_ports false
+    fi
 }
 
 setup_cron() {
@@ -1641,11 +1659,11 @@ verify_install() {
 }
 
 print_links() {
-    REALITY_LINK="vless://${UUID}@${DOMAIN}:443?encryption=none&security=reality&type=tcp&sni=${REALITY_DEST}&fp=chrome&pbk=${REALITY_PUB}&sid=6ba85179e30d4fc2&flow=xtls-rprx-vision#reality-main"
+    REALITY_LINK="vless://${UUID}@${DOMAIN}:443?encryption=none&security=reality&type=tcp&sni=${REALITY_DEST}&fp=chrome&pbk=${REALITY_PUB}&sid=${REALITY_SHORT_ID}&flow=xtls-rprx-vision#reality-main"
     HY2_LINK="hysteria2://${UUID}@${DOMAIN}:443?obfs=salamander&obfs-password=${OBFS_PASS}&mport=443-${HY2_PORT_END}&peer=${DOMAIN}&insecure=0&sni=${DOMAIN}&alpn=h3#hy2-backup"
 
     cat >"${INSTALL_DIR}/subscribe.txt" <<EOF
-# stable-proxy-stack
+# IFIM-Proxy
 # Domain: ${DOMAIN}
 # Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
@@ -1663,52 +1681,13 @@ UUID=${UUID}
 OBFS_PASSWORD=${OBFS_PASS}
 REALITY_PUBLIC_KEY=${REALITY_PUB}
 REALITY_DEST=${REALITY_DEST}
-REALITY_SHORT_ID=6ba85179e30d4fc2
+REALITY_SHORT_ID=${REALITY_SHORT_ID}
+HY2_PORT_END=${HY2_PORT_END}
 SERVER_IPV4=${PUBLIC_IPV4:-unknown}
 EOF
     chmod 600 "${INSTALL_DIR}/credentials.txt"
 
-    cat >"${INSTALL_DIR}/clash-meta.yaml" <<EOF
-# Clash Meta / Mihomo profile — 含 Reality + Hysteria2 两个节点
-proxies:
-  - name: reality-main
-    type: vless
-    server: ${DOMAIN}
-    port: 443
-    uuid: ${UUID}
-    network: tcp
-    tls: true
-    udp: true
-    flow: xtls-rprx-vision
-    servername: ${REALITY_DEST}
-    reality-opts:
-      public-key: ${REALITY_PUB}
-      short-id: 6ba85179e30d4fc2
-    client-fingerprint: chrome
-  - name: hy2-backup
-    type: hysteria2
-    server: ${DOMAIN}
-    ports: 443-${HY2_PORT_END}
-    hop-interval: 30
-    password: ${UUID}
-    obfs: salamander
-    obfs-password: ${OBFS_PASS}
-    sni: ${DOMAIN}
-    skip-cert-verify: false
-    alpn:
-      - h3
-
-proxy-groups:
-  - name: stable-proxy
-    type: select
-    proxies:
-      - reality-main
-      - hy2-backup
-
-rules:
-  - MATCH,stable-proxy
-EOF
-    chmod 600 "${INSTALL_DIR}/clash-meta.yaml"
+    bash "${INSTALL_DIR}/scripts/render-clash.sh"
 
     generate_subscribe_web
 
@@ -1781,6 +1760,8 @@ ensure_firewall_ports false
 issue_tls_cert
 
 mkdir -p "${INSTALL_DIR}/scripts" "${WEB_ROOT}"
+fetch_asset "scripts/common.env" "${INSTALL_DIR}/scripts/common.env"
+fetch_asset "scripts/render-clash.sh" "${INSTALL_DIR}/scripts/render-clash.sh"
 fetch_asset "scripts/port-hopping.sh" "${INSTALL_DIR}/scripts/port-hopping.sh"
 fetch_asset "scripts/healthcheck.sh" "${INSTALL_DIR}/scripts/healthcheck.sh"
 fetch_asset "scripts/renew-hook.sh" "${INSTALL_DIR}/scripts/renew-hook.sh"
