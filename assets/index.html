@@ -3,38 +3,279 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Blog</title>
+  <title>DevLog — 开发笔记</title>
   <meta name="description" content="Personal technology notes and development logs.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:ital,wght@0,500;0,600;1,400&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --text: #1a1a2e;
+      --muted: #6b7280;
+      --accent: #4338ca;
+      --accent-light: #eef2ff;
+      --border: #e5e7eb;
+      --radius: 12px;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #222; background: #fafafa; }
-    header { background: #1a1a2e; color: #fff; padding: 2rem 1rem; text-align: center; }
-    header h1 { font-size: 1.8rem; font-weight: 600; }
-    header p { opacity: .8; margin-top: .5rem; }
-    main { max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
-    article { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    article h2 { font-size: 1.2rem; margin-bottom: .5rem; }
-    .meta { color: #888; font-size: .85rem; margin-bottom: .75rem; }
-    footer { text-align: center; padding: 2rem; color: #999; font-size: .85rem; }
+
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.7;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .top-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .top-bar-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      font-family: "Lora", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.15rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    nav { display: flex; gap: 1.5rem; }
+
+    nav a {
+      font-size: 0.875rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    nav a:hover { color: var(--accent); }
+
+    .hero {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 2rem;
+    }
+
+    .hero h1 {
+      font-family: "Lora", Georgia, serif;
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 600;
+      line-height: 1.25;
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 1.05rem;
+      max-width: 520px;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1.5rem 3rem;
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .articles { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    article {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.5rem 1.75rem;
+      border: 1px solid var(--border);
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+
+    article:hover {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      border-color: #d1d5db;
+    }
+
+    .tag-pill {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      background: var(--accent-light);
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      margin-bottom: 0.65rem;
+    }
+
+    article h2 {
+      font-family: "Lora", Georgia, serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      line-height: 1.35;
+    }
+
+    article h2 a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    article h2 a:hover { color: var(--accent); }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .meta time { color: #9ca3af; }
+
+    article p {
+      color: #374151;
+      font-size: 0.925rem;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 4.5rem;
+    }
+
+    .sidebar-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .sidebar-card h3 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .sidebar-card p {
+      font-size: 0.875rem;
+      color: #374151;
+      line-height: 1.55;
+    }
+
+    .topic-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .topic-list li a {
+      font-size: 0.875rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .topic-list li a:hover { color: var(--accent); }
+
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      color: #9ca3af;
+      font-size: 0.82rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    @media (max-width: 768px) {
+      main { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      nav { display: none; }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Tech Blog</h1>
-    <p>Development notes &amp; infrastructure logs</p>
-  </header>
+  <div class="top-bar">
+    <div class="top-bar-inner">
+      <a class="brand" href="/">DevLog</a>
+      <nav>
+        <a href="#">文章</a>
+        <a href="#">归档</a>
+        <a href="#">关于</a>
+      </nav>
+    </div>
+  </div>
+
+  <section class="hero">
+    <h1>开发笔记与基础设施日志</h1>
+    <p>记录 VPS 运维、网络配置与日常开发中的技术笔记。</p>
+  </section>
+
   <main>
-    <article>
-      <h2>Server maintenance log</h2>
-      <p class="meta">2026-07-04</p>
-      <p>Routine VPS maintenance: TLS renewal, nginx tuning, and backup verification.</p>
-    </article>
-    <article>
-      <h2>About</h2>
-      <p class="meta">Static site</p>
-      <p>Personal blog hosted on a small VPS.</p>
-    </article>
+    <div class="articles">
+      <article>
+        <span class="tag-pill">运维</span>
+        <h2><a href="#">Server maintenance log</a></h2>
+        <p class="meta"><time datetime="2026-07-04">2026-07-04</time> · 5 min read</p>
+        <p>Routine VPS maintenance: TLS renewal, nginx tuning, and backup verification. All services running normally after the scheduled update window.</p>
+      </article>
+
+      <article>
+        <span class="tag-pill">网络</span>
+        <h2><a href="#">TLS certificate auto-renewal setup</a></h2>
+        <p class="meta"><time datetime="2026-06-28">2026-06-28</time> · 8 min read</p>
+        <p>Configured acme.sh with DNS API for automatic certificate renewal. Cron jobs set for twice-daily checks with nginx reload hook.</p>
+      </article>
+
+      <article>
+        <span class="tag-pill">笔记</span>
+        <h2><a href="#">About this site</a></h2>
+        <p class="meta"><time datetime="2026-06-01">2026-06-01</time> · 2 min read</p>
+        <p>Personal static blog hosted on a small VPS. Built with plain HTML — no framework, no build step, just files served by nginx.</p>
+      </article>
+    </div>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>About</h3>
+        <p>Personal tech blog for development notes and infrastructure logs. Updated occasionally.</p>
+      </div>
+      <div class="sidebar-card">
+        <h3>Topics</h3>
+        <ul class="topic-list">
+          <li><a href="#">Linux &amp; VPS</a></li>
+          <li><a href="#">Networking</a></li>
+          <li><a href="#">DevOps</a></li>
+          <li><a href="#">Web Development</a></li>
+        </ul>
+      </div>
+    </aside>
   </main>
-  <footer>&copy; 2026 Tech Blog</footer>
+
+  <footer>&copy; 2026 DevLog · Static site on nginx</footer>
 </body>
 </html>

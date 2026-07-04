@@ -23,6 +23,12 @@ sha=$(curl -fsSL --max-time 15 -H "User-Agent: stable-proxy-refresh" \
     "https://api.github.com/repos/${GITHUB_REPO}/commits/main" \
     | sed -n 's/.*"sha": "\([a-f0-9]\{40\}\)".*/\1/p' | head -1)
 
+script_version=""
+install_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh?t=${TS}"
+[[ -n "${sha}" ]] && install_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/install.sh?t=${TS}"
+script_version=$(curl -fsSL -H "Cache-Control: no-cache" "${install_url}" \
+    | sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p' | head -1)
+
 html_url="https://raw.githubusercontent.com/${GITHUB_REPO}/main/assets/subscribe-panel.html?t=${TS}"
 [[ -n "${sha}" ]] && html_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/assets/subscribe-panel.html?t=${TS}"
 
@@ -40,11 +46,19 @@ if ! grep -q '__PANEL_CONFIG__' "${PANEL_DIR}/index.html"; then
     exit 1
 fi
 
-python3 - "${PANEL_DIR}/config.json" "${PANEL_DIR}/index.html" <<'PY'
+if [[ -n "${script_version}" ]]; then
+    tmp_cfg=$(mktemp)
+    jq --arg v "${script_version}" '. + {version: $v}' "${PANEL_DIR}/config.json" >"${tmp_cfg}"
+    mv "${tmp_cfg}" "${PANEL_DIR}/config.json"
+fi
+
+python3 - "${PANEL_DIR}/config.json" "${PANEL_DIR}/index.html" "${script_version:-}" <<'PY'
 import json, pathlib, sys
 cfg_path, html_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+script_version = sys.argv[3] if len(sys.argv) > 3 else ""
 cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
 html = html_path.read_text(encoding="utf-8")
+html = html.replace("__SCRIPT_VERSION__", cfg.get("version") or script_version)
 html = html.replace("__PANEL_CONFIG__", json.dumps(cfg, ensure_ascii=False))
 html_path.write_text(html, encoding="utf-8")
 PY
@@ -62,7 +76,8 @@ if [[ -f /etc/nginx/conf.d/stable-proxy.conf ]] \
 fi
 
 panel_url=$(jq -r .panelUrl "${PANEL_DIR}/config.json")
-echo "订阅页已刷新（三列布局 v0.0.12）: ${panel_url}"
+panel_ver=$(jq -r '.version // empty' "${PANEL_DIR}/config.json")
+echo "订阅页已刷新${panel_ver:+（v${panel_ver}）}: ${panel_url}"
 echo "验证: grep -c cards-row ${PANEL_DIR}/index.html"
 grep -c 'cards-row' "${PANEL_DIR}/index.html" || true
 echo "请用浏览器 Ctrl+F5 或无痕窗口打开"

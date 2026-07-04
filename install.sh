@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.15"
+SCRIPT_VERSION="0.0.16"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -1501,23 +1501,26 @@ generate_subscribe_web() {
   "clashUrl": "${clash_url}",
   "realityLink": "${REALITY_LINK}",
   "hy2Link": "${HY2_LINK}",
-  "created": "$(date -u +"%Y-%m-%d %H:%M UTC")"
+  "created": "$(date -u +"%Y-%m-%d %H:%M UTC")",
+  "version": "${SCRIPT_VERSION}"
 }
 EOF
     chmod 644 "${panel_dir}/config.json"
 
     if command -v python3 >/dev/null 2>&1; then
-        python3 - "${panel_dir}/config.json" "${panel_dir}/index.html" <<'PY'
+        python3 - "${panel_dir}/config.json" "${panel_dir}/index.html" "${SCRIPT_VERSION}" <<'PY'
 import json, pathlib, sys
-cfg_path, html_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+cfg_path, html_path, script_version = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
 cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
 html = html_path.read_text(encoding="utf-8")
+html = html.replace("__SCRIPT_VERSION__", cfg.get("version") or script_version)
 html = html.replace("__PANEL_CONFIG__", json.dumps(cfg, ensure_ascii=False))
 html_path.write_text(html, encoding="utf-8")
 PY
     elif command -v jq >/dev/null 2>&1; then
         local cfg_compact
         cfg_compact=$(jq -c . "${panel_dir}/config.json")
+        sed -i "s|__SCRIPT_VERSION__|${SCRIPT_VERSION}|g" "${panel_dir}/index.html"
         sed -i "s|__PANEL_CONFIG__|${cfg_compact}|g" "${panel_dir}/index.html"
     else
         warn "无法内嵌订阅页配置（缺少 python3/jq），一键导入可能不可用"

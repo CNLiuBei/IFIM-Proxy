@@ -378,7 +378,7 @@
             <div class="link-box" id="sub-url"></div>
           </div>
           <div class="qr-row">
-            <div class="qr"><img src="qr-sub.png" alt="订阅二维码" width="96" height="96"></div>
+            <div class="qr"><img src="qr-sub.svg" alt="订阅二维码" width="96" height="96"></div>
           </div>
           <div class="actions">
             <button class="btn-primary" type="button" id="copy-sub">拷贝订阅链接</button>
@@ -402,7 +402,7 @@
             <div class="link-box" id="reality-link"></div>
           </div>
           <div class="qr-row">
-            <div class="qr"><img src="qr-reality.png" alt="Reality 二维码" width="96" height="96"></div>
+            <div class="qr"><img src="qr-reality.svg" alt="Reality 二维码" width="96" height="96"></div>
           </div>
           <div class="actions">
             <button class="btn-primary" type="button" id="copy-reality">拷贝链接</button>
@@ -426,7 +426,7 @@
             <div class="link-box" id="hy2-link"></div>
           </div>
           <div class="qr-row">
-            <div class="qr"><img src="qr-hy2.png" alt="Hysteria2 二维码" width="96" height="96"></div>
+            <div class="qr"><img src="qr-hy2.svg" alt="Hysteria2 二维码" width="96" height="96"></div>
           </div>
           <div class="actions">
             <button class="btn-primary" type="button" id="copy-hy2">拷贝链接</button>
@@ -442,8 +442,8 @@
   <div class="toast" id="toast">已拷贝</div>
 
   <script>
-    const INLINE_CFG = __PANEL_CONFIG__;
-    const BUILT_VERSION = '__SCRIPT_VERSION__';
+    const INLINE_CFG = {"domain":"demo.example.com","subUrl":"https://demo.example.com:8443/s/demo-token-abc123/sub","clashUrl":"https://demo.example.com:8443/s/demo-token-abc123/clash","realityLink":"vless://00000000-0000-0000-0000-000000000001@demo.example.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=DemoPublicKey&sid=abcd1234&type=tcp#IFIM-Reality","hy2Link":"hysteria2://demo-password@demo.example.com:443?obfs=salamander&obfs-password=demo-obfs&sni=demo.example.com&insecure=0#IFIM-Hysteria2","created":"2026-07-04 07:29 UTC","version":"0.0.16"};
+    const BUILT_VERSION = '0.0.16';
     let cfg = {};
 
     function panelVersion(data) {
