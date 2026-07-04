@@ -42,7 +42,7 @@ Options:
   -h, --help            Show help
 
 One-line install example:
-  curl -fsSL https://raw.githubusercontent.com/YOUR_USER/stable-proxy-stack/main/install.sh | bash -s -- --domain example.com --email admin@example.com
+  curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- --domain example.com --email admin@example.com
 EOF
 }
 

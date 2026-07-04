@@ -25,7 +25,7 @@ UDP 443-450 → 端口跳跃（hy2 备用）
 ### 方式一：Standalone 模式（域名已指向 VPS，自动申请证书）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USER/stable-proxy-stack/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
   --domain your.domain.com \
   --email admin@your.domain.com
 ```
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/YOUR_USER/stable-proxy-stack/main/i
 ### 方式二：Cloudflare DNS 验证（推荐，无需停 nginx）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USER/stable-proxy-stack/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
   --domain your.domain.com \
   --email admin@your.domain.com \
   --cf-token YOUR_CLOUDFLARE_API_TOKEN
@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/YOUR_USER/stable-proxy-stack/main/i
 ### 方式三：克隆仓库后安装
 
 ```bash
-git clone https://github.com/YOUR_USER/stable-proxy-stack.git
+git clone https://github.com/CNLiuBei/stable-proxy-stack.git
 cd stable-proxy-stack
 chmod +x install.sh
 bash install.sh --domain your.domain.com --email admin@your.domain.com
