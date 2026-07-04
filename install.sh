@@ -1404,30 +1404,14 @@ EOF
     echo -e "${GREEN}  安装完成！${NC}"
     echo "============================================================"
     echo
-    echo "  域名:     ${DOMAIN}"
-    echo "  本机 IP:  ${PUBLIC_IPV4:-未知}"
-    echo "  已保存:   ${INSTALL_DIR}/subscribe.txt"
-    echo "            ${INSTALL_DIR}/credentials.txt"
-    echo "            ${INSTALL_DIR}/clash-meta.yaml"
+    echo "  订阅网页: ${PANEL_URL}"
     echo
-    echo -e "${CYAN}  订阅网页（二维码 + 一键导入）:${NC}"
-    echo "  ${PANEL_URL}"
-    echo
-    echo -e "${YELLOW}[主力·稳定] VLESS + Reality + Vision${NC}"
-    echo "${REALITY_LINK}"
-    echo
-    echo -e "${YELLOW}[备用·速度] Hysteria2 + obfs${NC}"
-    echo "${HY2_LINK}"
-    echo
-    echo "客户端提示:"
-    echo "  - 手机扫码: 打开上方订阅网页"
-    echo "  - Clash Meta: 网页内一键导入，或 ${INSTALL_DIR}/clash-meta.yaml"
-    echo "  - 策略: reality-main 优先，失败自动切 hy2-backup"
-    echo "  - 测试: 浏览器访问 https://www.google.com"
-    echo
-    echo "云防火墙提醒:"
-    echo "  请开放: 22, 80, 443/tcp, 443/udp, 8443, 444-${HY2_PORT_END}/udp"
+    echo "  配置目录: ${INSTALL_DIR}/"
     echo "============================================================"
+
+    if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] && command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "${PANEL_URL}" >/dev/null 2>&1 &
+    fi
 }
 
 # ── Main ────────────────────────────────────────────────────────────

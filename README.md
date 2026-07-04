@@ -36,23 +36,13 @@ curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/in
 
 ## 安装完成后
 
-终端会输出 **订阅网页链接**（含二维码、一键导入按钮），形如：
+终端仅显示 **订阅网页链接**，节点链接与二维码在网页内查看：
 
 ```
 https://你的域名:8443/s/随机token/
 ```
 
-同时保存到 `/etc/stable-proxy-stack/credentials.txt` 的 `PANEL_URL` 字段。
-
-本地文件：
-
-```
-/etc/stable-proxy-stack/subscribe.txt      # 节点链接
-/etc/stable-proxy-stack/credentials.txt  # 密钥 + 订阅网页
-/etc/stable-proxy-stack/clash-meta.yaml  # Clash Meta 配置
-```
-
-**客户端**：打开订阅网页扫码或点一键导入；Clash Meta / v2rayNG / Shadowrocket / Sing-box 等均支持。
+链接同时保存在 `/etc/stable-proxy-stack/credentials.txt`。
 
 ---
 
