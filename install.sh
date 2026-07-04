@@ -3,6 +3,8 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
+SCRIPT_VERSION="0.0.1"
+
 set -euo pipefail
 
 # 确保终端中文不乱码（Debian/Ubuntu 优先 C.UTF-8）
@@ -58,6 +60,7 @@ CF_TOKEN=""
 CERT_MODE=""   # cf | standalone
 CHECK_ONLY=false
 SKIP_CHECK=false
+SKIP_VERSION_CHECK=false
 ASSUME_YES=false
 DNS_CONFIRMED=false
 SUB_PANEL_TOKEN=""
@@ -68,6 +71,41 @@ warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 info() { echo -e "${CYAN}[i]${NC} $*"; }
 fail() { echo -e "${RED}[x]${NC} $*" >&2; }
 err()  { fail "$*"; exit 1; }
+
+show_script_version() {
+    echo -e "${CYAN}[i]${NC} stable-proxy-stack 安装脚本 ${BOLD}v${SCRIPT_VERSION}${NC}"
+}
+
+# 与 GitHub 上的版本比对，防止 curl 缓存加载旧脚本
+check_script_version() {
+    local remote_ver url
+
+    [[ "${SKIP_VERSION_CHECK}" == true ]] && return 0
+    command -v curl >/dev/null 2>&1 || return 0
+
+    url="${REPO_BASE}/install.sh"
+    remote_ver=$(curl -fsSL --max-time 10 "${url}?t=$(date +%s)" 2>/dev/null \
+        | grep -m1 '^SCRIPT_VERSION=' \
+        | sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p') || true
+
+    if [[ -z "${remote_ver}" ]]; then
+        warn "无法获取 GitHub 最新版本，继续运行（当前 v${SCRIPT_VERSION}）"
+        return 0
+    fi
+
+    if [[ "${remote_ver}" == "${SCRIPT_VERSION}" ]]; then
+        info "脚本版本 v${SCRIPT_VERSION}（已是最新）"
+        return 0
+    fi
+
+    warn "当前脚本 v${SCRIPT_VERSION}，GitHub 最新 v${remote_ver} — 可能加载了缓存旧版"
+    warn "请使用带时间戳的安装命令重新拉取:"
+    echo "  curl -fsSL \"${url}?v=\$(date +%s)\" | bash"
+    if [[ "${ASSUME_YES}" == false ]]; then
+        prompt_yes_no "仍使用当前旧版脚本继续？" "n" \
+            || err "已取消。请重新拉取最新脚本后再安装"
+    fi
+}
 
 PREFLIGHT_ERRORS=()
 PREFLIGHT_WARNS=()
@@ -91,7 +129,9 @@ usage() {
   --sing-box-version V  sing-box 版本（默认 1.13.14）
   --check-only          仅环境预检，不安装
   --skip-check          跳过预检（不推荐）
+  --skip-version-check  跳过与 GitHub 最新版本比对
   -y, --yes             非交互：自动确认 DNS/CF/警告
+  -V, --version         显示脚本版本
   -h, --help            显示帮助
 
 示例:
@@ -112,7 +152,9 @@ while [[ $# -gt 0 ]]; do
         --sing-box-version) SING_BOX_VERSION="$2"; shift 2 ;;
         --check-only) CHECK_ONLY=true; shift ;;
         --skip-check) SKIP_CHECK=true; shift ;;
+        --skip-version-check) SKIP_VERSION_CHECK=true; shift ;;
         -y|--yes) ASSUME_YES=true; shift ;;
+        -V|--version) echo "stable-proxy-stack install.sh v${SCRIPT_VERSION}"; exit 0 ;;
         -h|--help) usage; exit 0 ;;
         *) err "未知选项: $1" ;;
     esac
@@ -359,6 +401,7 @@ show_welcome() {
     echo
     echo -e "${BOLD}============================================================${NC}"
     echo -e "${BOLD}  stable-proxy-stack — 交互式安装向导${NC}"
+    echo -e "${BOLD}  版本 v${SCRIPT_VERSION}${NC}"
     echo -e "${BOLD}============================================================${NC}"
     echo
     echo "  将部署: VLESS Reality（稳定主力）+ Hysteria2（速度备用）"
@@ -1452,6 +1495,8 @@ EOF
 export DEBIAN_FRONTEND=noninteractive
 
 ensure_bootstrap_tools
+show_script_version
+check_script_version
 prompt_install_options
 
 EMAIL="${EMAIL:-admin@${DOMAIN}}"
