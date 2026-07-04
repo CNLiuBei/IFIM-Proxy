@@ -20,63 +20,115 @@ UDP 443-450 → 端口跳跃（hy2 备用）
 - 域名已解析到 VPS IP
 - 开放端口：22, 80, 443/tcp, 443/udp, 8443, 444-450/udp
 
-> **极简镜像说明**：部分 VPS 出厂未预装 `curl`。脚本会在预检前通过 `apt` 自动安装 `curl` / `wget`（需 root）。若系统既无 curl 又无 wget 且无法使用 apt，请先手动安装后再运行，或改用下方「克隆仓库」方式。
+> **极简镜像说明**：Debian / Ubuntu 自带 `apt`，但部分 VPS 未预装 `curl`。下方一键命令已在前缀加入安装步骤；脚本内部也会自动检测并补装 `curl` / `wget`。
+>
+> 单独安装下载工具：
+>
+> ```bash
+> apt-get update && apt-get install -y curl wget ca-certificates
+> ```
 
 ## 一键安装
 
-### 部署前检查（推荐先跑）
+在 **VPS 上** SSH 登录后复制粘贴执行。`apt` 为系统自带，无需单独安装。
 
-在**你的电脑**上执行（管道里的 `curl` 是本地客户端，用于把脚本下载到 VPS 执行）：
+### 交互式安装（推荐）
+
+运行后按提示输入域名，确认 DNS 是否已解析，选择是否用 Cloudflare 申请证书：
 
 ```bash
+apt-get update && apt-get install -y curl wget ca-certificates && \
+curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash
+```
+
+交互流程（4 步 + 确认）：
+
+```
+============================================================
+  stable-proxy-stack — interactive setup
+============================================================
+
+--- Step 1: Domain ---
+Enter your domain (e.g. jp.example.com): jp.example.com
+
+--- Step 2: DNS ---
+  jp.example.com  →  45.76.219.82
+Has the domain A record been pointed to this server? [Y/n]: y
+
+--- Step 3: Certificate ---
+  [1] Cloudflare DNS  — recommended, no port 80 needed
+  [2] Standalone HTTP — needs TCP 80 open on cloud firewall
+Select certificate method [1]: 1
+Enter Cloudflare API Token: ****
+
+--- Step 4: ACME email ---
+ACME email for Let's Encrypt [admin@jp.example.com]:
+
+--- Configuration summary ---
+  Domain:       jp.example.com
+  Certificate:  Cloudflare DNS
+  Action:       install stack
+
+Proceed? [Y/n]: y
+```
+
+### 部署前检查（推荐先跑）
+
+```bash
+apt-get update && apt-get install -y curl wget ca-certificates && \
 curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
-  --domain your.domain.com \
   --check-only
 ```
 
-检查项包括：root 权限、系统/架构、内存磁盘、**curl/wget 可用性**、**域名 A 记录是否指向本机**、端口占用、证书模式提示、sing-box 是否可下载。
+也可在交互中输入域名后加 `--check-only`，或预填 `--domain your.domain.com --check-only`。
 
-### 方式一：Standalone 模式（域名已指向 VPS，自动申请证书）
+检查项包括：root 权限、系统/架构、内存磁盘、curl/wget、域名 A 记录是否指向本机、端口占用、证书模式、sing-box 是否可下载。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
-  --domain your.domain.com \
-  --email admin@your.domain.com
-```
+### 非交互式安装（脚本/CI 用）
 
-> **注意**：需在云厂商防火墙放行 **80/tcp**（证书验证）及 443/8443 等端口。Vultr 默认可能只开 22。
-
-### 方式二：Cloudflare DNS 验证（推荐，无需开放 80 端口）
+**Standalone**（需放行 **80/tcp**）：
 
 ```bash
+apt-get update && apt-get install -y curl wget ca-certificates && \
 curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
   --domain your.domain.com \
   --email admin@your.domain.com \
-  --cf-token YOUR_CLOUDFLARE_API_TOKEN
+  -y
 ```
 
-### 方式三：克隆仓库后安装（VPS 上无 curl 时推荐）
+**Cloudflare DNS**（推荐，无需 80 端口）：
 
 ```bash
-apt-get update && apt-get install -y git
-git clone https://github.com/CNLiuBei/stable-proxy-stack.git
-cd stable-proxy-stack
-chmod +x install.sh
-bash install.sh --domain your.domain.com --email admin@your.domain.com
+apt-get update && apt-get install -y curl wget ca-certificates && \
+curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
+  --domain your.domain.com \
+  --email admin@your.domain.com \
+  --cf-token YOUR_CLOUDFLARE_API_TOKEN \
+  -y
 ```
 
-脚本会自动检测并安装缺失的 `curl` / `wget`，无需在 VPS 上预先安装 curl。
+> Vultr 等云厂商默认可能只开 22 端口；Standalone 模式需在防火墙放行 80/443/8443 等。
+
+### 克隆仓库后安装
+
+```bash
+apt-get update && apt-get install -y git curl wget ca-certificates && \
+git clone https://github.com/CNLiuBei/stable-proxy-stack.git && \
+cd stable-proxy-stack && \
+chmod +x install.sh && \
+bash install.sh
+```
 
 ## 安装参数
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--domain` | ✅ | 你的域名 |
+| `--domain` | ❌ | 域名（省略则交互输入） |
 | `--email` | ❌ | ACME 邮箱，默认 `admin@域名` |
-| `--cf-token` | ❌ | Cloudflare API Token（DNS 验证，无需 80 端口） |
+| `--cf-token` | ❌ | Cloudflare API Token（跳过 CF 交互询问） |
 | `--check-only` | ❌ | 仅运行环境检查，不安装 |
 | `--skip-check` | ❌ | 跳过预检（不推荐） |
-| `-y, --yes` | ❌ | 有警告时自动继续 |
+| `-y, --yes` | ❌ | 非交互模式：跳过 DNS/CF 询问，警告时自动继续 |
 | `--reality-dest` | ❌ | Reality 伪装目标，默认 `dl.google.com` |
 | `--hy2-port-end` | ❌ | UDP 端口跳跃上限，默认 `450` |
 | `--sing-box-version` | ❌ | sing-box 版本，默认 `1.13.14` |
@@ -112,7 +164,7 @@ proxy-groups:
 
 ## 包含的优化
 
-- [x] 部署前环境检查（DNS/端口/系统/curl-wget）
+- [x] 交互式引导（域名 / DNS 确认 / CF 证书）
 - [x] 极简镜像自动安装 curl/wget
 - [x] VLESS + Reality + Vision TCP 443 主力
 - [x] hy2 UDP 443 + Salamander obfs

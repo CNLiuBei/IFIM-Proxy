@@ -16,13 +16,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+BOLD='\033[1m'
 
 DOMAIN=""
 EMAIL=""
 CF_TOKEN=""
+CERT_MODE=""   # cf | standalone
 CHECK_ONLY=false
 SKIP_CHECK=false
 ASSUME_YES=false
+DNS_CONFIRMED=false
 
 log()  { echo -e "${GREEN}[+]${NC} $*"; }
 warn() { echo -e "${YELLOW}[!]${NC} $*"; }
@@ -38,23 +41,27 @@ add_warn()  { PREFLIGHT_WARNS+=("$1"); }
 
 usage() {
     cat <<EOF
-Usage: bash install.sh --domain DOMAIN [options]
+Usage: bash install.sh [options]
+
+Interactive mode (default):
+  Run without --domain to be prompted for domain, DNS status, and certificate method.
 
 Options:
-  --domain DOMAIN       Required. Your domain
+  --domain DOMAIN       Domain (optional; will prompt if omitted)
   --email EMAIL         ACME email (default: admin@DOMAIN)
-  --cf-token TOKEN      Cloudflare API token for DNS ACME (skip port 80 requirement)
+  --cf-token TOKEN      Cloudflare API token for DNS ACME (skip CF prompt)
   --reality-dest HOST   Reality dest/SNI (default: dl.google.com)
   --hy2-port-end PORT   UDP port hopping end (default: 450)
   --sing-box-version V  sing-box version (default: 1.13.14)
   --check-only          Run environment checks only, do not install
   --skip-check          Skip preflight checks (not recommended)
-  -y, --yes             Continue when only warnings (no errors)
+  -y, --yes             Auto-confirm prompts (DNS/CF/warnings)
   -h, --help            Show help
 
 Examples:
+  bash install.sh
   bash install.sh --domain jp.example.com --email admin@example.com
-  bash install.sh --domain jp.example.com --cf-token YOUR_CF_TOKEN
+  bash install.sh --domain jp.example.com --cf-token YOUR_CF_TOKEN -y
   bash install.sh --domain jp.example.com --check-only
 EOF
 }
@@ -75,7 +82,355 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "${DOMAIN}" ]] || { usage; err "--domain is required"; }
+prompt_yes_no() {
+    local prompt="$1"
+    local default="${2:-n}"
+    local hint ans
+    local tty="/dev/tty"
+
+    if [[ "${default}" == "y" ]]; then
+        hint="[Y/n]"
+    else
+        hint="[y/N]"
+    fi
+
+    if [[ "${ASSUME_YES}" == true ]]; then
+        [[ "${default}" == "y" ]]
+        return
+    fi
+
+    if [[ -t 0 ]]; then
+        read -r -p "${prompt} ${hint}: " ans
+    elif [[ -r "${tty}" ]]; then
+        read -r -p "${prompt} ${hint}: " ans <"${tty}"
+    else
+        err "${prompt} (non-interactive; use -y or pass options on command line)"
+    fi
+
+    ans="${ans:-${default}}"
+    [[ "${ans}" =~ ^[Yy]$ ]]
+}
+
+# Read a line from stdin or /dev/tty (works with curl | bash).
+prompt_read() {
+    local prompt="$1"
+    local var_name="$2"
+    local default="${3:-}"
+    local value=""
+    local tty="/dev/tty"
+    local line
+
+    if [[ -n "${default}" ]]; then
+        line="${prompt} [${default}]: "
+    else
+        line="${prompt}: "
+    fi
+
+    if [[ -t 0 ]]; then
+        read -r -p "${line}" value
+    elif [[ -r "${tty}" ]]; then
+        read -r -p "${line}" value <"${tty}"
+    else
+        value="${default}"
+    fi
+
+    value="${value:-${default}}"
+    printf -v "${var_name}" '%s' "${value}"
+}
+
+prompt_secret() {
+    local prompt="$1"
+    local var_name="$2"
+    local value=""
+    local tty="/dev/tty"
+
+    if [[ -t 0 ]]; then
+        read -rs -p "${prompt}: " value
+        echo
+    elif [[ -r "${tty}" ]]; then
+        read -rs -p "${prompt}: " value <"${tty}"
+        echo
+    else
+        err "${prompt} (non-interactive; pass --cf-token on command line)"
+    fi
+    printf -v "${var_name}" '%s' "${value}"
+}
+
+ensure_dns_lookup() {
+    command -v dig >/dev/null 2>&1 && return 0
+    command -v host >/dev/null 2>&1 && return 0
+    if [[ "${EUID}" -eq 0 ]] && command -v apt-get >/dev/null 2>&1; then
+        wait_dpkg_lock
+        apt-get install -y -qq dnsutils >/dev/null 2>&1 \
+            || apt-get install -y dnsutils >/dev/null 2>&1 \
+            || true
+    fi
+}
+
+normalize_domain() {
+    local d="$1"
+    d="${d#http://}"
+    d="${d#https://}"
+    d="${d%%/*}"
+    d="${d%%:*}"
+    echo "${d}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+
+validate_domain() {
+    local d="$1"
+    [[ -n "${d}" ]] || return 1
+    [[ "${d}" == *.* ]] || return 1
+    [[ "${d}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]
+}
+
+validate_email() {
+    local e="$1"
+    [[ "${e}" == *@*.* ]]
+}
+
+show_welcome() {
+    echo
+    echo -e "${BOLD}============================================================${NC}"
+    echo -e "${BOLD}  stable-proxy-stack — interactive setup${NC}"
+    echo -e "${BOLD}============================================================${NC}"
+    echo
+    echo "  Deploy: VLESS Reality (stable) + Hysteria2 (speed backup)"
+    echo
+    if [[ "${CHECK_ONLY}" == true ]]; then
+        echo -e "  ${CYAN}Mode:${NC} preflight check only (no install)"
+    else
+        echo -e "  ${CYAN}Mode:${NC} full install"
+    fi
+    echo
+    echo "  You will be asked for:"
+    echo "    1. Domain name"
+    echo "    2. DNS resolution status"
+    echo "    3. Certificate method (Cloudflare or Standalone)"
+    echo "    4. ACME email"
+    echo
+    echo -e "${BOLD}============================================================${NC}"
+    echo
+}
+
+check_root_early() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        err "Must run as root. Try: sudo bash install.sh"
+    fi
+}
+
+dns_matches_server() {
+    local ip matched=false
+    mapfile -t _dns_a < <(resolve_dns A || true)
+    [[ ${#_dns_a[@]} -gt 0 && -n "${PUBLIC_IPV4:-}" ]] || return 1
+    for ip in "${_dns_a[@]}"; do
+        [[ "${ip}" == "${PUBLIC_IPV4}" ]] && matched=true
+    done
+    [[ "${matched}" == true ]]
+}
+
+show_dns_status() {
+    mapfile -t DNS_A < <(resolve_dns A || true)
+    echo
+    info "Server IPv4: ${PUBLIC_IPV4:-unknown}"
+    if [[ ${#DNS_A[@]} -gt 0 ]]; then
+        info "DNS A record for ${DOMAIN}: ${DNS_A[*]}"
+        if dns_matches_server; then
+            log "DNS A record matches this server"
+            return 0
+        fi
+        warn "DNS A record does NOT match this server (${PUBLIC_IPV4:-unknown})"
+        warn "If using Cloudflare, use grey cloud (DNS only), not orange cloud"
+        return 1
+    fi
+    warn "No DNS A record found for ${DOMAIN} yet"
+    return 1
+}
+
+prompt_domain() {
+    local input normalized
+
+    while true; do
+        if [[ -z "${DOMAIN}" ]]; then
+            prompt_read "Enter your domain (e.g. jp.example.com)" input
+            normalized=$(normalize_domain "${input}")
+        else
+            normalized=$(normalize_domain "${DOMAIN}")
+            info "Domain from command line: ${normalized}"
+            if [[ "${ASSUME_YES}" == false ]]; then
+                if ! prompt_yes_no "Use this domain?" "y"; then
+                    DOMAIN=""
+                    continue
+                fi
+            fi
+        fi
+
+        if validate_domain "${normalized}"; then
+            DOMAIN="${normalized}"
+            break
+        fi
+        warn "Invalid domain format: ${input:-${DOMAIN}} (example: jp.example.com)"
+        DOMAIN=""
+    done
+}
+
+prompt_dns_confirmation() {
+    local dns_default="n"
+    dns_matches_server && dns_default="y"
+
+    echo
+    echo -e "${BOLD}--- Step 2: DNS ---${NC}"
+    if [[ -n "${PUBLIC_IPV4:-}" ]]; then
+        echo "  Add this A record at your DNS provider if not done yet:"
+        echo -e "  ${GREEN}${DOMAIN}${NC}  →  ${GREEN}${PUBLIC_IPV4}${NC}"
+        echo
+    fi
+
+    show_dns_status || true
+
+    echo
+    if [[ "${ASSUME_YES}" == true ]]; then
+        if [[ "${dns_default}" == "y" ]]; then
+            DNS_CONFIRMED=true
+        else
+            DNS_CONFIRMED=false
+        fi
+        info "DNS confirmation skipped (-y); preflight will verify A record"
+        return
+    fi
+
+    if prompt_yes_no "Has the domain A record been pointed to this server?" "${dns_default}"; then
+        DNS_CONFIRMED=true
+        info "DNS: confirmed by user"
+    else
+        DNS_CONFIRMED=false
+        warn "Please add: ${DOMAIN} A → ${PUBLIC_IPV4:-YOUR_SERVER_IP}"
+        if prompt_yes_no "Continue anyway? (certificate may fail)" "n"; then
+            warn "Continuing without confirmed DNS"
+        else
+            err "Configure DNS first, then re-run: bash install.sh"
+        fi
+    fi
+}
+
+prompt_cert_method() {
+    local choice
+
+    echo
+    echo -e "${BOLD}--- Step 3: Certificate ---${NC}"
+    echo "  [1] Cloudflare DNS  — recommended, no port 80 needed"
+    echo "  [2] Standalone HTTP — needs TCP 80 open on cloud firewall"
+    echo
+
+    if [[ -n "${CF_TOKEN}" ]]; then
+        CERT_MODE="cf"
+        info "Certificate: Cloudflare DNS (from --cf-token)"
+        return
+    fi
+
+    if [[ "${ASSUME_YES}" == true ]]; then
+        CERT_MODE="standalone"
+        CF_TOKEN=""
+        info "Certificate: Standalone (-y, no --cf-token)"
+        warn "Ensure cloud firewall allows TCP 80, or pass --cf-token"
+        return
+    fi
+
+    while true; do
+        prompt_read "Select certificate method" choice "1"
+        case "${choice}" in
+            1|cf|CF|cloudflare|Cloudflare)
+                CERT_MODE="cf"
+                echo
+                info "Cloudflare API Token needs Zone → DNS → Edit permission"
+                info "Create at: https://dash.cloudflare.com/profile/api-tokens"
+                while [[ -z "${CF_TOKEN}" ]]; do
+                    prompt_secret "Enter Cloudflare API Token" CF_TOKEN
+                    [[ -n "${CF_TOKEN}" ]] || warn "Token cannot be empty."
+                done
+                info "Certificate: Cloudflare DNS"
+                break
+                ;;
+            2|standalone|Standalone|http)
+                CERT_MODE="standalone"
+                CF_TOKEN=""
+                info "Certificate: Let's Encrypt Standalone"
+                warn "Open cloud firewall ports: 22, 80, 443/tcp, 443/udp, 8443, 444-${HY2_PORT_END}/udp"
+                break
+                ;;
+            *)
+                warn "Invalid choice. Enter 1 or 2."
+                ;;
+        esac
+    done
+}
+
+prompt_acme_email() {
+    echo
+    echo -e "${BOLD}--- Step 4: ACME email ---${NC}"
+
+    if [[ -n "${EMAIL}" ]]; then
+        info "ACME email: ${EMAIL} (from command line)"
+        return
+    fi
+
+    while true; do
+        prompt_read "ACME email for Let's Encrypt" EMAIL "admin@${DOMAIN}"
+        EMAIL="${EMAIL:-admin@${DOMAIN}}"
+        if validate_email "${EMAIL}"; then
+            break
+        fi
+        warn "Invalid email: ${EMAIL}"
+        EMAIL=""
+    done
+    info "ACME email: ${EMAIL}"
+}
+
+print_config_summary() {
+    local cert_label
+    if [[ -n "${CF_TOKEN}" ]]; then
+        cert_label="Cloudflare DNS"
+    else
+        cert_label="Standalone (port 80)"
+    fi
+
+    echo
+    echo -e "${BOLD}--- Configuration summary ---${NC}"
+    echo "  Domain:       ${DOMAIN}"
+    echo "  Server IP:    ${PUBLIC_IPV4:-unknown}"
+    echo "  DNS ready:    $([[ "${DNS_CONFIRMED}" == true ]] && echo yes || echo no / unconfirmed)"
+    echo "  Certificate:  ${cert_label}"
+    echo "  ACME email:   ${EMAIL}"
+    echo "  Action:       $([[ "${CHECK_ONLY}" == true ]] && echo preflight check only || echo install stack)"
+    echo
+}
+
+confirm_proceed() {
+    if [[ "${ASSUME_YES}" == true ]]; then
+        return 0
+    fi
+
+    print_config_summary
+
+    local msg="Proceed"
+    [[ "${CHECK_ONLY}" == true ]] && msg="Run preflight check"
+    prompt_yes_no "${msg}?" "y" || err "Cancelled by user"
+    echo
+}
+
+prompt_install_options() {
+    show_welcome
+    check_root_early
+
+    echo -e "${BOLD}--- Step 1: Domain ---${NC}"
+    PUBLIC_IPV4=$(get_public_ipv4)
+    prompt_domain
+    ensure_dns_lookup
+
+    prompt_dns_confirmation
+    prompt_cert_method
+    prompt_acme_email
+    confirm_proceed
+}
 
 wait_dpkg_lock() {
     local waited=0
@@ -776,18 +1131,29 @@ EOF
 }
 
 # ── Main ────────────────────────────────────────────────────────────
-EMAIL="${EMAIL:-admin@${DOMAIN}}"
 export DEBIAN_FRONTEND=noninteractive
 
-# curl/wget required for preflight and downloads; auto-install on minimal images
 ensure_bootstrap_tools
+prompt_install_options
+
+EMAIL="${EMAIL:-admin@${DOMAIN}}"
 
 if [[ "${SKIP_CHECK}" == false ]]; then
     run_preflight || exit 1
 fi
 
 if [[ "${CHECK_ONLY}" == true ]]; then
-    log "Check-only mode complete."
+    echo
+    log "Preflight check complete — environment looks ready."
+    echo
+    info "To install, run again without --check-only:"
+    if [[ -n "${CF_TOKEN}" ]]; then
+        echo "  bash install.sh --domain ${DOMAIN} --cf-token <TOKEN> --email ${EMAIL}"
+    else
+        echo "  bash install.sh --domain ${DOMAIN} --email ${EMAIL}"
+    fi
+    echo
+    echo "Or simply run: bash install.sh"
     exit 0
 fi
 
