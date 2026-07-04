@@ -322,17 +322,31 @@ prompt_read() {
 prompt_secret() {
     local prompt="$1"
     local var_name="$2"
+    local visible="${3:-false}"
     local value=""
     local tty="/dev/tty"
 
-    if [[ -t 0 ]]; then
-        read -rs -p "${prompt}: " value
-        echo
-    elif [[ -r "${tty}" ]]; then
-        read -rs -p "${prompt}: " value <"${tty}"
-        echo
+    if [[ "${visible}" == true ]]; then
+        info "Token 会显示在屏幕上，粘贴后按 Enter 确认"
+        if [[ -t 0 ]]; then
+            read -r -p "${prompt}: " value
+        elif [[ -r "${tty}" ]]; then
+            read -r -p "${prompt}: " value <"${tty}"
+        else
+            err "${prompt}（非交互环境，请使用 --cf-token 传参）"
+        fi
     else
-        err "${prompt}（非交互环境，请使用 --cf-token 传参）"
+        info "输入时不显示字符（安全模式），粘贴后按 Enter；完成后会提示字符数"
+        if [[ -t 0 ]]; then
+            read -rs -p "${prompt}: " value
+            echo
+        elif [[ -r "${tty}" ]]; then
+            read -rs -p "${prompt}: " value <"${tty}"
+            echo
+        else
+            err "${prompt}（非交互环境，请使用 --cf-token 传参）"
+        fi
+        [[ -n "${value}" ]] && info "已接收 ${#value} 个字符"
     fi
     printf -v "${var_name}" '%s' "${value}"
 }
