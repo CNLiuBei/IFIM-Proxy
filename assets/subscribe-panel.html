@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>节点订阅</title>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -22,7 +21,7 @@
     .tag { display: inline-block; font-size: .7rem; padding: .15rem .45rem; border-radius: 4px; margin-right: .35rem; }
     .tag-main { background: #065f46; color: #6ee7b7; }
     .tag-back { background: #713f12; color: #fcd34d; }
-    .qr { text-align: center; margin: .75rem 0; }
+    .qr { text-align: center; margin: .75rem 0; min-height: 0; }
     .qr canvas, .qr img { border-radius: 8px; background: #fff; padding: 8px; }
     .link-box {
       background: #0f172a; border: 1px solid #475569; border-radius: 8px;
@@ -31,18 +30,18 @@
     }
     .btns { display: flex; flex-wrap: wrap; gap: .45rem; }
     button, .btn {
-      border: none; border-radius: 8px; padding: .45rem .75rem; font-size: .8rem;
+      border: none; border-radius: 8px; padding: .5rem .8rem; font-size: .82rem;
       cursor: pointer; text-decoration: none; display: inline-block; text-align: center;
     }
     .btn-copy { background: #334155; color: #f1f5f9; }
     .btn-copy:hover { background: #475569; }
     .btn-import { background: #2563eb; color: #fff; flex: 1; min-width: calc(50% - .25rem); }
     .btn-import:hover { background: #1d4ed8; }
-    .import-section .btns { margin-top: .5rem; }
+    .import-label { font-size: .78rem; color: #94a3b8; margin: .65rem 0 .35rem; }
     .toast {
       position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
       background: #22c55e; color: #fff; padding: .5rem 1rem; border-radius: 8px;
-      font-size: .85rem; opacity: 0; transition: opacity .25s; pointer-events: none;
+      font-size: .85rem; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 99;
     }
     .toast.show { opacity: 1; }
     footer { text-align: center; color: #64748b; font-size: .75rem; padding: 1rem 0 2rem; }
@@ -59,12 +58,10 @@
       <div class="link-box" id="sub-url"></div>
       <div class="qr" id="qr-sub"></div>
       <div class="btns">
-        <button class="btn-copy" onclick="copyText(cfg.subUrl)">复制订阅 URL</button>
+        <button class="btn-copy" type="button" id="copy-sub">复制订阅 URL</button>
       </div>
-      <div class="import-section">
-        <p style="font-size:.78rem;color:#94a3b8;margin:.75rem 0 .35rem">一键导入客户端</p>
-        <div class="btns" id="import-sub-btns"></div>
-      </div>
+      <p class="import-label">一键导入客户端</p>
+      <div class="btns" id="import-sub-btns"></div>
     </div>
 
     <div class="card">
@@ -72,8 +69,10 @@
       <div class="link-box" id="reality-link"></div>
       <div class="qr" id="qr-reality"></div>
       <div class="btns">
-        <button class="btn-copy" onclick="copyText(cfg.realityLink)">复制链接</button>
+        <button class="btn-copy" type="button" id="copy-reality">复制链接</button>
       </div>
+      <p class="import-label">单节点导入</p>
+      <div class="btns" id="import-reality-btns"></div>
     </div>
 
     <div class="card">
@@ -81,15 +80,17 @@
       <div class="link-box" id="hy2-link"></div>
       <div class="qr" id="qr-hy2"></div>
       <div class="btns">
-        <button class="btn-copy" onclick="copyText(cfg.hy2Link)">复制链接</button>
+        <button class="btn-copy" type="button" id="copy-hy2">复制链接</button>
       </div>
+      <p class="import-label">单节点导入</p>
+      <div class="btns" id="import-hy2-btns"></div>
     </div>
 
-    <div class="card import-section">
+    <div class="card">
       <h2>⚡ Clash Meta 配置</h2>
       <div class="btns">
         <a class="btn btn-import" id="clash-open" href="#">Clash Meta 导入</a>
-        <button class="btn-copy" onclick="copyText(cfg.clashUrl)">复制 Clash URL</button>
+        <button class="btn-copy" type="button" id="copy-clash">复制 Clash URL</button>
       </div>
     </div>
 
@@ -98,6 +99,7 @@
   <div class="toast" id="toast">已复制</div>
 
   <script>
+    const INLINE_CFG = __PANEL_CONFIG__;
     let cfg = {};
 
     function toast(msg) {
@@ -108,10 +110,14 @@
     }
 
     function copyText(text) {
+      if (!text) return;
       navigator.clipboard.writeText(text).then(() => toast('已复制到剪贴板')).catch(() => {
         const ta = document.createElement('textarea');
-        ta.value = text; document.body.appendChild(ta); ta.select();
-        document.execCommand('copy'); document.body.removeChild(ta);
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
         toast('已复制到剪贴板');
       });
     }
@@ -122,52 +128,97 @@
       return btoa(unescape(encodeURIComponent(s)));
     }
 
-    function makeQr(el, text) {
-      QRCode.toCanvas(document.createElement('canvas'), text, { width: 200, margin: 1 }, (err, canvas) => {
-        if (!err) { el.innerHTML = ''; el.appendChild(canvas); }
-      });
-    }
-
     function importBtn(label, href) {
       const a = document.createElement('a');
       a.className = 'btn btn-import';
       a.textContent = label;
       a.href = href;
+      a.rel = 'noopener';
       return a;
     }
 
-    function renderImportButtons() {
+    function fillBtns(boxId, items) {
+      const box = document.getElementById(boxId);
+      box.innerHTML = '';
+      items.forEach(([name, url]) => box.appendChild(importBtn(name, url)));
+    }
+
+    function renderSubImports() {
       const sub = cfg.subUrl;
       const clash = cfg.clashUrl;
-      const box = document.getElementById('import-sub-btns');
-      const clients = [
+      fillBtns('import-sub-btns', [
         ['Clash Meta', 'clash://install-config?url=' + encUrl(clash)],
         ['v2rayNG', 'v2rayng://install-config?url=' + encUrl(sub)],
         ['Shadowrocket', 'shadowrocket://add/sub://' + b64Utf8(sub)],
         ['Sing-box', 'sing-box://import-remote-profile?url=' + encUrl(sub) + '#stable-proxy'],
         ['Hiddify', 'hiddify://import/?url=' + encUrl(sub)],
         ['NekoBox', 'sn://subscription?url=' + encUrl(sub)],
-      ];
-      clients.forEach(([name, url]) => box.appendChild(importBtn(name, url)));
+      ]);
       document.getElementById('clash-open').href = 'clash://install-config?url=' + encUrl(clash);
     }
 
-    fetch('config.json')
-      .then(r => r.json())
-      .then(data => {
-        cfg = data;
-        document.getElementById('domain-label').textContent = data.domain + ' · ' + (data.created || '');
-        document.getElementById('sub-url').textContent = data.subUrl;
-        document.getElementById('reality-link').textContent = data.realityLink;
-        document.getElementById('hy2-link').textContent = data.hy2Link;
-        makeQr(document.getElementById('qr-sub'), data.subUrl);
-        makeQr(document.getElementById('qr-reality'), data.realityLink);
-        makeQr(document.getElementById('qr-hy2'), data.hy2Link);
-        renderImportButtons();
-      })
-      .catch(() => {
-        document.getElementById('domain-label').textContent = '加载配置失败';
-      });
+    function renderNodeImports(boxId, link) {
+      fillBtns(boxId, [
+        ['Shadowrocket', 'shadowrocket://add/' + encUrl(link)],
+        ['v2rayNG', 'v2rayng://install-config?url=' + encUrl(link)],
+        ['Sing-box', 'sing-box://import?url=' + encUrl(link)],
+        ['Hiddify', 'hiddify://import/?url=' + encUrl(link)],
+      ]);
+    }
+
+    function makeQr(el, text) {
+      if (!text || typeof QRCode === 'undefined') return;
+      try {
+        QRCode.toCanvas(document.createElement('canvas'), text, { width: 200, margin: 1 }, (err, canvas) => {
+          if (!err && canvas) {
+            el.innerHTML = '';
+            el.appendChild(canvas);
+          }
+        });
+      } catch (_) { /* QR 可选，不影响导入按钮 */ }
+    }
+
+    function renderPanel(data) {
+      cfg = data;
+      document.getElementById('domain-label').textContent = data.domain + ' · ' + (data.created || '');
+      document.getElementById('sub-url').textContent = data.subUrl;
+      document.getElementById('reality-link').textContent = data.realityLink;
+      document.getElementById('hy2-link').textContent = data.hy2Link;
+
+      document.getElementById('copy-sub').onclick = () => copyText(data.subUrl);
+      document.getElementById('copy-reality').onclick = () => copyText(data.realityLink);
+      document.getElementById('copy-hy2').onclick = () => copyText(data.hy2Link);
+      document.getElementById('copy-clash').onclick = () => copyText(data.clashUrl);
+
+      renderSubImports();
+      renderNodeImports('import-reality-btns', data.realityLink);
+      renderNodeImports('import-hy2-btns', data.hy2Link);
+
+      tryQr();
+    }
+
+    function tryQr() {
+      if (!cfg.subUrl) return;
+      makeQr(document.getElementById('qr-sub'), cfg.subUrl);
+      makeQr(document.getElementById('qr-reality'), cfg.realityLink);
+      makeQr(document.getElementById('qr-hy2'), cfg.hy2Link);
+    }
+
+    function loadPanel() {
+      if (INLINE_CFG && INLINE_CFG.subUrl) {
+        renderPanel(INLINE_CFG);
+        return;
+      }
+      fetch('config.json')
+        .then(r => r.json())
+        .then(renderPanel)
+        .catch(() => {
+          document.getElementById('domain-label').textContent = '加载配置失败，请重新运行安装脚本';
+        });
+    }
+
+    loadPanel();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js" async defer onload="tryQr()"></script>
 </body>
 </html>
