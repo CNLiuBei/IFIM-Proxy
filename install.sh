@@ -3,9 +3,10 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.4"
+SCRIPT_VERSION="0.0.5"
 
 set -euo pipefail
+ORIG_INSTALL_ARGS=("$@")
 
 # 确保终端中文不乱码（Debian/Ubuntu 优先 C.UTF-8）
 setup_utf8_locale() {
@@ -43,6 +44,7 @@ setup_utf8_locale
 INSTALL_DIR="/etc/stable-proxy-stack"
 WEB_ROOT="/var/www/stable-proxy"
 REPO_BASE="${REPO_BASE:-https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main}"
+GITHUB_REPO="${GITHUB_REPO:-CNLiuBei/stable-proxy-stack}"
 REALITY_DEST="${REALITY_DEST:-dl.google.com}"
 HY2_PORT_END="${HY2_PORT_END:-450}"
 SING_BOX_VERSION="${SING_BOX_VERSION:-1.13.14}"
@@ -76,20 +78,55 @@ show_script_version() {
     echo -e "${CYAN}[i]${NC} stable-proxy-stack 安装脚本 ${BOLD}v${SCRIPT_VERSION}${NC}"
 }
 
-# 与 GitHub 上的版本比对，防止 curl 缓存加载旧脚本
+# 获取 GitHub main 最新 commit（绕过 raw CDN 缓存）
+github_main_sha() {
+    curl -fsSL --max-time 15 \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${GITHUB_REPO}/commits/main" \
+        2>/dev/null | sed -n 's/.*"sha": "\([a-f0-9]\{40\}\)".*/\1/p' | head -1
+}
+
+fetch_remote_script_version() {
+    local sha="$1"
+    curl -fsSL --max-time 15 \
+        "https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/install.sh" \
+        2>/dev/null | grep -m1 '^SCRIPT_VERSION=' \
+        | sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p'
+}
+
+upgrade_install_script() {
+    local sha="$1"
+    local remote_ver="$2"
+    local url tmp
+
+    url="https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/install.sh"
+    tmp=$(mktemp /tmp/stable-proxy-install.XXXXXX.sh)
+    if ! curl -fsSL --max-time 30 "${url}" -o "${tmp}"; then
+        rm -f "${tmp}"
+        err "无法下载最新脚本（v${remote_ver}），请稍后重试"
+    fi
+    chmod 755 "${tmp}"
+    warn "当前 v${SCRIPT_VERSION} → 自动拉取最新 v${remote_ver}"
+    SKIP_VERSION_CHECK=true
+    export SKIP_VERSION_CHECK
+    exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}"
+}
+
+# 与 GitHub 最新 commit 比对；发现旧版则自动下载并重跑
 check_script_version() {
-    local remote_ver url
+    local sha remote_ver
 
     [[ "${SKIP_VERSION_CHECK}" == true ]] && return 0
     command -v curl >/dev/null 2>&1 || return 0
 
-    url="${REPO_BASE}/install.sh"
-    remote_ver=$(curl -fsSL --max-time 10 "${url}?t=$(date +%s)" 2>/dev/null \
-        | grep -m1 '^SCRIPT_VERSION=' \
-        | sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p') || true
+    sha=$(github_main_sha) || {
+        warn "无法获取 GitHub 最新 commit，继续运行（当前 v${SCRIPT_VERSION}）"
+        return 0
+    }
 
+    remote_ver=$(fetch_remote_script_version "${sha}") || true
     if [[ -z "${remote_ver}" ]]; then
-        warn "无法获取 GitHub 最新版本，继续运行（当前 v${SCRIPT_VERSION}）"
+        warn "无法读取远程脚本版本，继续运行（当前 v${SCRIPT_VERSION}）"
         return 0
     fi
 
@@ -98,13 +135,7 @@ check_script_version() {
         return 0
     fi
 
-    warn "当前脚本 v${SCRIPT_VERSION}，GitHub 最新 v${remote_ver} — 可能加载了缓存旧版"
-    warn "请使用带时间戳的安装命令重新拉取:"
-    echo "  curl -fsSL \"${url}?v=\$(date +%s)\" | bash"
-    if [[ "${ASSUME_YES}" == false ]]; then
-        prompt_yes_no "仍使用当前旧版脚本继续？" "n" \
-            || err "已取消。请重新拉取最新脚本后再安装"
-    fi
+    upgrade_install_script "${sha}" "${remote_ver}"
 }
 
 PREFLIGHT_ERRORS=()

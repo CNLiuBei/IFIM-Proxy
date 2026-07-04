@@ -23,14 +23,16 @@
 
 ## 一键安装
 
-SSH 登录 VPS，粘贴执行：
+SSH 登录 VPS，粘贴执行（**推荐**：按 GitHub 最新 commit 拉取，彻底绕过 CDN 缓存）：
 
 ```bash
 apt-get update && apt-get install -y curl wget ca-certificates && \
-curl -fsSL "https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh?v=$(date +%s)" | bash
+bash -c 'R=CNLiuBei/stable-proxy-stack; S=$(curl -fsSL https://api.github.com/repos/$R/commits/main | sed -n "s/.*\"sha\": \"\\([a-f0-9]\\{40\\}\\)\".*/\\1/p" | head -1); curl -fsSL "https://raw.githubusercontent.com/$R/${S}/install.sh" | bash'
 ```
 
-安装开始时会显示脚本版本（当前 **v0.0.4**）。若与 GitHub 最新不一致，会提示重新拉取，避免 CDN 缓存旧脚本。
+即使误用了旧缓存脚本，启动后也会**自动检测并升级到最新版**再安装。
+
+安装开始时会显示脚本版本（当前 **v0.0.5**）。
 
 重装时若已有有效 TLS 证书（本机或 acme.sh），将自动复用，不会重复向 Let's Encrypt 申请。证书临近到期时，每天 **03:00 / 15:00** 自动续签并重载服务。
 
