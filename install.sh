@@ -599,18 +599,6 @@ confirm_proceed() {
     local msg="确认继续"
     [[ "${CHECK_ONLY}" == true ]] && msg="确认运行预检"
     prompt_yes_no "${msg}？" "y" || err "用户已取消"
-
-    # 防呆: 完整安装前再次输入域名确认
-    if [[ "${CHECK_ONLY}" == false ]]; then
-        echo
-        warn "防呆确认: 即将修改系统服务、防火墙并申请证书"
-        local typed
-        prompt_read "请再次输入域名「${DOMAIN}」以确认安装" typed
-        typed=$(normalize_domain "${typed}")
-        [[ "${typed}" == "${DOMAIN}" ]] \
-            || err "域名输入不一致（${typed} ≠ ${DOMAIN}），安装已取消"
-        log "域名二次确认通过"
-    fi
     echo
 }
 
