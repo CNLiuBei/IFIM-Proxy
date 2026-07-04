@@ -446,6 +446,10 @@ show_public_ip() {
 
 validate_cf_token() {
     [[ -z "${CF_TOKEN}" ]] && return 0
+    CF_TOKEN="${CF_TOKEN//$'\r'/}"
+    CF_TOKEN="${CF_TOKEN//$'\n'/}"
+    CF_TOKEN="${CF_TOKEN#"${CF_TOKEN%%[![:space:]]*}"}"
+    CF_TOKEN="${CF_TOKEN%"${CF_TOKEN##*[![:space:]]}"}"
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
         warn "无法在线验证 CF Token（缺少 curl/wget）"
         return 0
