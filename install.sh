@@ -336,30 +336,8 @@ validate_cf_token() {
 
 guard_standalone_port80() {
     [[ -n "${CF_TOKEN}" ]] && return 0
-    [[ -z "${PUBLIC_IPV4:-}" ]] && return 0
-    if check_connectivity "${PUBLIC_IPV4}" 80 tcp; then
-        log "TCP 80 端口可达，Standalone 证书模式可用"
-        return 0
-    fi
-    warn "Standalone 模式需要公网可访问 TCP 80，当前检测不通"
-    warn "请在云厂商防火墙放行 80 端口，或改用 Cloudflare DNS 证书（选项 1）"
-    if [[ "${ASSUME_YES}" == true ]]; then
-        err "Standalone 模式但 TCP 80 不可达。请开放 80 或使用 --cf-token"
-    fi
-    if prompt_yes_no "80 端口未通，是否改选 Cloudflare DNS 证书？" "y"; then
-        CERT_MODE="cf"
-        CF_TOKEN=""
-        echo
-        info "CF Token 需具备 Zone → DNS → Edit 权限"
-        while [[ -z "${CF_TOKEN}" ]]; do
-            prompt_secret "请输入 Cloudflare API Token" CF_TOKEN
-            [[ -n "${CF_TOKEN}" ]] || warn "Token 不能为空"
-        done
-        validate_cf_token
-    else
-        prompt_yes_no "仍坚持使用 Standalone？（证书很可能失败）" "n" \
-            || err "已取消。请开放 TCP 80 或改用 Cloudflare DNS 证书"
-    fi
+    info "证书方式: Let's Encrypt Standalone（需公网 80 端口）"
+    info "本机 UFW 将在安装时自动检测并放行"
 }
 
 on_install_error() {
@@ -787,13 +765,100 @@ port_in_use() {
 }
 
 check_connectivity() {
-    local host="$1" port="$2" proto="${3:-tcp}" label="$4"
+    local host="$1" port="$2" proto="${3:-tcp}"
     if [[ "${proto}" == "tcp" ]]; then
         timeout 3 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null && return 0
     else
         timeout 3 nc -u -z -w 2 "${host}" "${port}" 2>/dev/null && return 0
     fi
     return 1
+}
+
+# 检测 UFW 是否已放行某端口
+ufw_port_allowed() {
+    local port="$1"
+    local proto="$2"
+    local status_out
+
+    command -v ufw >/dev/null 2>&1 || return 1
+    status_out=$(ufw status 2>/dev/null) || return 1
+    echo "${status_out}" | grep -E "${port}/${proto}" | grep -qiE 'ALLOW|ALLOW IN' && return 0
+    return 1
+}
+
+# iptables 兜底放行（无 ufw 时）
+iptables_allow_port() {
+    local port="$1"
+    local proto="$2"
+
+    if ! command -v iptables >/dev/null 2>&1; then
+        return 1
+    fi
+    if iptables -C INPUT -p "${proto}" --dport "${port}" -j ACCEPT 2>/dev/null; then
+        return 0
+    fi
+    iptables -I INPUT -p "${proto}" --dport "${port}" -j ACCEPT 2>/dev/null || true
+}
+
+# 检测本机防火墙并自动放行所需端口（云厂商防火墙无法远程修改）
+ensure_firewall_ports() {
+    local reset="${1:-false}"
+    local spec port proto p opened=0 added=0
+
+    log "正在检测本机防火墙端口..."
+
+    if ! command -v ufw >/dev/null 2>&1; then
+        apt-get install -y -qq ufw >/dev/null 2>&1 || apt-get install -y ufw || true
+    fi
+
+    if command -v ufw >/dev/null 2>&1; then
+        if [[ "${reset}" == true ]]; then
+            ufw --force reset >/dev/null 2>&1 || true
+            ufw default deny incoming >/dev/null 2>&1 || true
+            ufw default allow outgoing >/dev/null 2>&1 || true
+        fi
+
+        for spec in "22/tcp" "80/tcp" "443/tcp" "443/udp" "8443/tcp"; do
+            port="${spec%/*}"
+            proto="${spec#*/}"
+            if ufw_port_allowed "${port}" "${proto}"; then
+                opened=$((opened + 1))
+                info "端口 ${port}/${proto} 已放行"
+            else
+                warn "端口 ${port}/${proto} 未放行，正在自动添加..."
+                ufw allow "${port}/${proto}" >/dev/null 2>&1 || true
+                added=$((added + 1))
+                log "已放行 ${port}/${proto}"
+            fi
+        done
+
+        for p in $(seq 444 "${HY2_PORT_END}"); do
+            if ufw_port_allowed "${p}" udp; then
+                opened=$((opened + 1))
+            else
+                ufw allow "${p}/udp" >/dev/null 2>&1 || true
+                added=$((added + 1))
+            fi
+        done
+
+        ufw --force enable >/dev/null 2>&1 || true
+        log "本机 UFW 就绪（已有 ${opened} 条，新增 ${added} 条）"
+    else
+        warn "未安装 ufw，尝试 iptables 放行..."
+        for spec in "22/tcp" "80/tcp" "443/tcp" "443/udp" "8443/tcp"; do
+            port="${spec%/*}"
+            proto="${spec#*/}"
+            iptables_allow_port "${port}" "${proto}"
+        done
+        for p in $(seq 444 "${HY2_PORT_END}"); do
+            iptables_allow_port "${p}" udp
+        done
+        log "iptables 规则已更新"
+    fi
+
+    if [[ -z "${CF_TOKEN}" ]]; then
+        warn "云厂商防火墙（Vultr/AWS 等）需在控制面板手动放行 80，脚本无法自动修改"
+    fi
 }
 
 run_preflight() {
@@ -919,13 +984,7 @@ run_preflight() {
     # firewall / cloud firewall hints for standalone
     if [[ -z "${CF_TOKEN}" ]]; then
         add_warn "Standalone 证书需要公网可访问 TCP 80"
-        add_warn "请开放云防火墙（Vultr/AWS 等）: 22,80,443/tcp,443/udp,8443,444-${HY2_PORT_END}/udp"
-        if [[ -n "${PUBLIC_IPV4}" ]]; then
-            if ! check_connectivity "${PUBLIC_IPV4}" 80 tcp; then
-                add_warn "无法连接本机 ${PUBLIC_IPV4}:80（云防火墙可能拦截 80）"
-                add_warn "若 80 端口不可用，请使用 --cf-token 走 DNS 证书"
-            fi
-        fi
+        add_warn "本机 UFW 将在安装时自动放行；云防火墙（Vultr 等）需在面板手动开放"
     else
         info "Cloudflare DNS 证书: 无需 80 端口"
     fi
@@ -1272,18 +1331,7 @@ EOF
 }
 
 setup_firewall() {
-    log "正在配置防火墙..."
-    ufw --force reset >/dev/null 2>&1 || true
-    ufw default deny incoming
-    ufw default allow outgoing
-    ufw allow 22/tcp
-    ufw allow 80/tcp
-    ufw allow 443/tcp
-    ufw allow 443/udp
-    ufw allow 8443/tcp
-    local p
-    for p in $(seq 444 "${HY2_PORT_END}"); do ufw allow "${p}/udp" 2>/dev/null; done
-    ufw --force enable
+    ensure_firewall_ports true
 }
 
 setup_cron() {
@@ -1443,12 +1491,6 @@ fi
 
 trap on_install_error ERR
 
-# 非交互 Standalone 最后一道防线
-if [[ -z "${CF_TOKEN}" && "${ASSUME_YES}" == true && -n "${PUBLIC_IPV4:-}" ]]; then
-    check_connectivity "${PUBLIC_IPV4}" 80 tcp \
-        || err "Standalone 模式但 TCP 80 不可达。请开放 80 或使用 --cf-token"
-fi
-
 UUID=$(cat /proc/sys/kernel/random/uuid)
 OBFS_PASS=$(openssl rand -hex 8)
 log "UUID: ${UUID}"
@@ -1462,6 +1504,7 @@ REALITY_PRIV=$(echo "${REALITY_KEYS}" | awk '/PrivateKey/ {print $2}')
 REALITY_PUB=$(echo "${REALITY_KEYS}" | awk '/PublicKey/ {print $2}')
 [[ -n "${REALITY_PRIV}" && -n "${REALITY_PUB}" ]] || err "Reality 密钥生成失败"
 
+ensure_firewall_ports false
 issue_tls_cert
 
 mkdir -p "${INSTALL_DIR}/scripts" "${WEB_ROOT}"
