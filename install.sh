@@ -3,8 +3,8 @@
 #
 # IFIM-Proxy: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-# @commit: 1d889c8a79676f393b369fb80525ac7079d0d712
-SCRIPT_VERSION="2026.07.04+1d889c8"
+# @commit: 42edf2993b7ab20e6a65adf77dfc1053dbf7399d
+SCRIPT_VERSION="2026.07.04+42edf29"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
